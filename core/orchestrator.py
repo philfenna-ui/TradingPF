@@ -12,6 +12,8 @@ from core.models import HorizonSignal, ModuleScore, RiskReport, TradeRecommendat
 from ml.multi_timeframe import HORIZON_DAYS, MultiTimeframeModeler
 from risk.command_center import RiskCommandCenter
 
+STALE_BADGE_HOURS = 0.5
+
 
 class TradingPFOrchestrator:
     def __init__(
@@ -222,8 +224,8 @@ class TradingPFOrchestrator:
             mock_fields = list(quality.get("mock_fields", []))
             core_market_mock_fields = {"daily", "intraday"}
             mock_data_used = bool(quality.get("is_mock", False)) and any(f in core_market_mock_fields for f in mock_fields)
-            stale_data_used = bool(quality.get("is_stale", False))
             stale_age_hours = float(quality.get("stale_age_hours", 0.0))
+            stale_data_used = bool(quality.get("is_stale", False)) and stale_age_hours >= STALE_BADGE_HOURS
 
             horizons = self._horizon_signals(current_price, vol, model_out.probabilities, model_out.target_ranges)
             weights = self.scoring_cfg.get("weights", {})

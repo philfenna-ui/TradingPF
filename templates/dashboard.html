@@ -156,7 +156,7 @@
       display: inline-block; border-radius: 999px; font-size: 11px; font-weight: 700; padding: 3px 8px; color: #fff;
     }
     .mock-pill { background: var(--purple); margin-left: 6px; }
-    .old-pill { background: #f59e0b; margin-left: 6px; display: inline-block; border-radius: 999px; font-size: 11px; font-weight: 700; padding: 3px 8px; color: #fff; }
+    .old-pill { background: #f59e0b; margin-left: 6px; display: inline-block; border-radius: 999px; font-size: 11px; font-weight: 700; padding: 3px 8px; color: #fff; border: 0; cursor: pointer; }
     .watch-btn {
       border: 1px solid var(--line);
       background: transparent;
@@ -253,17 +253,13 @@
     }
     .progress-bar {
       height: 100%;
-      width: 35%;
+      width: 0%;
       border-radius: 999px;
       background: linear-gradient(90deg, #2563eb, #22c55e);
-      animation: slide 1.7s ease-in-out infinite;
+      transition: width 0.35s ease;
     }
     @keyframes spin {
       to { transform: rotate(360deg); }
-    }
-    @keyframes slide {
-      0% { transform: translateX(-120%); }
-      100% { transform: translateX(300%); }
     }
   </style>
 </head>
@@ -421,7 +417,7 @@
 
     {% if data %}
     <div class="panel">
-      <h2 style="margin-top:0;">US + Europe Market Headline Briefing</h2>
+      <h2 style="margin-top:0;">US / Europe / Asia / Middle East Headline Briefing</h2>
       <p class="muted" style="margin-top:0;">Updated: {{ data.headline_brief.generated_at }}</p>
       <div class="grid-3">
         <div>
@@ -457,9 +453,9 @@
           </ul>
         </div>
         <div>
-          <h3 style="margin:0 0 8px 0; font-size:14px;">World</h3>
+          <h3 style="margin:0 0 8px 0; font-size:14px;">World (incl. Asia & Middle East)</h3>
           <ul style="margin:0; padding-left:18px;">
-            {% for h in data.headline_brief.headlines if h.region in ["world_macro","major_events","world_general"] %}
+            {% for h in data.headline_brief.headlines if h.region in ["asia_markets","middle_east","world_macro","defense_geo","major_events","world_general"] %}
             <li>
               {% if h.link %}
               <a href="{{ h.link }}" target="_blank" rel="noopener noreferrer">{{ h.title }}</a>
@@ -557,6 +553,7 @@
         <tbody id="searchRecoBody">
           {% for rec in data.search_results %}
           <tr class="search-rec-row"
+              data-ticker="{{ rec.ticker }}"
               data-base-score="{{ rec.institutional_score }}"
               data-horizons='{{ rec.horizons|tojson }}'
               data-probconf='{{ rec.risk_metrics.probability_confidence|tojson }}'
@@ -580,7 +577,7 @@
                 {% endfor %}
                 <button type="submit" class="watch-btn" title="Add to watchlist">👁</button>
               </form>
-              {% if rec.stale_data_used %}<span class="old-pill" title="Cached data age">{{ "OLD (" ~ ("%.1f"|format(rec.stale_age_hours)) ~ "h)" }}</span>{% endif %}
+              {% if rec.stale_data_used %}<button type="button" class="old-pill stale-pill" data-ticker="{{ rec.ticker }}" title="Click to try refreshing this ticker">{{ "OLD (" ~ ("%.1f"|format(rec.stale_age_hours)) ~ "h)" }}</button>{% endif %}
             </td>
             <td>{{ rec.name }}</td>
             <td>{{ rec.category }}</td>
@@ -665,7 +662,7 @@
                 {% endfor %}
                 <button type="submit" class="watch-btn" title="Add to watchlist">👁</button>
               </form>
-              {% if rec.stale_data_used %}<span class="old-pill" title="Cached data age">{{ "OLD (" ~ ("%.1f"|format(rec.stale_age_hours)) ~ "h)" }}</span>{% endif %}
+              {% if rec.stale_data_used %}<button type="button" class="old-pill stale-pill" data-ticker="{{ rec.ticker }}" title="Click to try refreshing this ticker">{{ "OLD (" ~ ("%.1f"|format(rec.stale_age_hours)) ~ "h)" }}</button>{% endif %}
             </td>
             <td>{{ rec.name }}</td>
             <td>{{ rec.category }}</td>
@@ -766,6 +763,7 @@
         <tbody id="recoBody">
           {% for rec in data.recommendations %}
           <tr class="{% if rec.mock_data_used %}row-mock{% endif %} rec-row"
+              data-ticker="{{ rec.ticker }}"
               data-base-score="{{ rec.institutional_score }}"
               data-horizons='{{ rec.horizons|tojson }}'
               data-probconf='{{ rec.risk_metrics.probability_confidence|tojson }}'
@@ -790,7 +788,7 @@
                 <button type="submit" class="watch-btn" title="Add to watchlist">👁</button>
               </form>
               {% if rec.mock_data_used %}<span class="mock-pill" title="Mock fields: {{ ', '.join(rec.mock_fields) }}">MOCK</span>{% endif %}
-              {% if rec.stale_data_used %}<span class="old-pill" title="Cached data age">{{ "OLD (" ~ ("%.1f"|format(rec.stale_age_hours)) ~ "h)" }}</span>{% endif %}
+              {% if rec.stale_data_used %}<button type="button" class="old-pill stale-pill" data-ticker="{{ rec.ticker }}" title="Click to try refreshing this ticker">{{ "OLD (" ~ ("%.1f"|format(rec.stale_age_hours)) ~ "h)" }}</button>{% endif %}
             </td>
             <td>{{ rec.name }}</td>
             <td>{{ rec.category }}</td>
@@ -946,6 +944,7 @@
         <strong id="loadingTitle">Refreshing pipeline...</strong>
       </div>
       <div class="progress-track"><div class="progress-bar"></div></div>
+      <div class="muted" id="loadingPct" style="font-size:12px; margin-top:6px;">0%</div>
       <p id="loadingStep" class="muted" style="margin:10px 0 0 0; font-size:12px;">
         Fetching latest market and macro data.
       </p>
@@ -983,7 +982,7 @@
       cb.addEventListener("change", () => {
         const lbl = cb.closest(".signal-chip");
         if (lbl) lbl.classList.toggle("on", cb.checked);
-        document.getElementById("signalFilterForm").submit();
+        applySignalFilterLocal();
       });
     });
 
@@ -1082,13 +1081,16 @@
     const modal = document.getElementById("termModal");
     const tt = document.getElementById("termTitle");
     const tb = document.getElementById("termBody");
+    const openModal = (title, body) => {
+      tt.innerText = title;
+      tb.innerText = body;
+      modal.style.display = "flex";
+    };
     document.querySelectorAll(".term-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const d = glossary[btn.dataset.term];
         if (!d) return;
-        tt.innerText = d.title;
-        tb.innerText = d.body;
-        modal.style.display = "flex";
+        openModal(d.title, d.body);
       });
     });
     document.querySelectorAll(".help-icon").forEach(el => {
@@ -1097,9 +1099,7 @@
         const key = el.dataset.colHelp;
         const d = columnGlossary[key];
         if (!d) return;
-        tt.innerText = d.title;
-        tb.innerText = d.body;
-        modal.style.display = "flex";
+        openModal(d.title, d.body);
       });
     });
     document.getElementById("closeModal")?.addEventListener("click", () => modal.style.display = "none");
@@ -1108,7 +1108,11 @@
     const loadingOverlay = document.getElementById("loadingOverlay");
     const loadingStep = document.getElementById("loadingStep");
     const loadingTitle = document.getElementById("loadingTitle");
+    const loadingPct = document.getElementById("loadingPct");
+    const progressBar = document.querySelector(".progress-bar");
     let loadingTimer = null;
+    let pctTimer = null;
+    let pct = 0;
     const loadingSteps = [
       "Fetching latest market and macro data.",
       "Running technical, flow, and catalyst modules.",
@@ -1120,6 +1124,9 @@
       loadingTitle.textContent = title;
       let i = 0;
       loadingStep.textContent = loadingSteps[i];
+      pct = 1;
+      if (progressBar) progressBar.style.width = pct + "%";
+      if (loadingPct) loadingPct.textContent = pct + "%";
       loadingOverlay.style.display = "flex";
       document.body.style.overflow = "hidden";
       if (loadingTimer) clearInterval(loadingTimer);
@@ -1127,13 +1134,25 @@
         i = (i + 1) % loadingSteps.length;
         loadingStep.textContent = loadingSteps[i];
       }, 1400);
+      if (pctTimer) clearInterval(pctTimer);
+      pctTimer = setInterval(() => {
+        // Estimated progress only (no backend streaming): asymptotic rise to 95%.
+        pct = Math.min(95, pct + Math.max(1, Math.round((100 - pct) * 0.07)));
+        if (progressBar) progressBar.style.width = pct + "%";
+        if (loadingPct) loadingPct.textContent = pct + "%";
+      }, 400);
     };
     const hideLoading = () => {
       if (!loadingOverlay) return;
+      if (progressBar) progressBar.style.width = "100%";
+      if (loadingPct) loadingPct.textContent = "100%";
       loadingOverlay.style.display = "none";
       document.body.style.overflow = "";
       if (loadingTimer) clearInterval(loadingTimer);
+      if (pctTimer) clearInterval(pctTimer);
       loadingTimer = null;
+      pctTimer = null;
+      pct = 0;
     };
     window.addEventListener("pageshow", hideLoading);
     window.addEventListener("beforeunload", () => {
@@ -1147,6 +1166,96 @@
     });
     document.querySelectorAll('form[action="/watchlist/add"], form[action="/watchlist/remove"]').forEach(form => {
       form.addEventListener("submit", () => showLoading("Updating watchlist..."));
+    });
+    const getCurrentControls = () => {
+      const confEl = document.getElementById("confSlider");
+      const riskEl = document.getElementById("riskSlider");
+      const profileEl = document.querySelector('select[name="ranking_profile"]');
+      const disabled = Array.from(document.querySelectorAll('input[name="disabled_modules"]:checked')).map(x => x.value);
+      const included = Array.from(document.querySelectorAll('#signalFilterForm input[name="include_signals"]:checked')).map(x => x.value);
+      return {
+        confidence_threshold: Number(confEl?.value || 0.5),
+        risk_tolerance: Number(riskEl?.value || 0.5),
+        ranking_profile: String(profileEl?.value || "balanced"),
+        disabled_modules: disabled,
+        include_signals: included.length ? included : ["Strong Buy", "Buy", "Accumulate", "Watch", "Avoid"],
+      };
+    };
+    const updateRowFromRecommendation = (row, rec) => {
+      if (!row || !rec) return;
+      row.dataset.baseScore = String(rec.institutional_score || 0);
+      row.dataset.horizons = JSON.stringify(rec.horizons || []);
+      row.dataset.probconf = JSON.stringify((rec.risk_metrics || {}).probability_confidence || {});
+      row.dataset.spark = JSON.stringify(rec.sparkline || []);
+      row.dataset.price = String(rec.current_price || 0);
+
+      const nameCell = row.querySelector("td:nth-child(2)");
+      const catCell = row.querySelector("td:nth-child(3)");
+      if (nameCell) nameCell.textContent = rec.name || rec.ticker || "";
+      if (catCell) catCell.textContent = rec.category || "General";
+      const buyPill = row.querySelector(".buy-pill");
+      if (buyPill) {
+        buyPill.textContent = rec.buy_category || "Watch";
+        buyPill.style.background = rec.buy_color || "#2563eb";
+      }
+
+      const firstCell = row.querySelector("td:first-child");
+      if (firstCell) {
+        firstCell.querySelectorAll(".old-pill").forEach(x => x.remove());
+        if (rec.stale_data_used) {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "old-pill stale-pill";
+          b.dataset.ticker = rec.ticker || "";
+          const age = Number(rec.stale_age_hours || 0).toFixed(1);
+          b.textContent = `OLD (${age}h)`;
+          b.title = "Click to try refreshing this ticker";
+          firstCell.appendChild(b);
+        }
+      }
+      row.classList.toggle("row-mock", Boolean(rec.mock_data_used));
+      const detail = row.nextElementSibling;
+      const list = detail?.querySelector("ul");
+      if (list && Array.isArray(rec.plain_reason_points)) {
+        list.innerHTML = "";
+        rec.plain_reason_points.forEach(pt => {
+          const li = document.createElement("li");
+          li.textContent = String(pt);
+          list.appendChild(li);
+        });
+      }
+    };
+    document.addEventListener("click", async (e) => {
+      const btn = e.target?.closest?.(".stale-pill");
+      if (!btn) return;
+      e.preventDefault();
+      const ticker = String(btn.dataset.ticker || "").trim().toUpperCase();
+      if (!ticker) return;
+      showLoading(`Refreshing ${ticker}...`);
+      try {
+        const controls = getCurrentControls();
+        const resp = await fetch("/api/refresh_ticker", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ticker, ...controls }),
+        });
+        const out = await resp.json();
+        if (!out?.ok || !out?.recommendation) {
+          openModal("Ticker Refresh", out?.message || `Could not refresh ${ticker}.`);
+          return;
+        }
+        document.querySelectorAll(`tr.rec-row[data-ticker="${ticker}"], tr.search-rec-row[data-ticker="${ticker}"]`).forEach(row => {
+          updateRowFromRecommendation(row, out.recommendation);
+        });
+        renderRecommendationRows();
+        sortRows(currentSortKey);
+        sortSearchRows(currentSearchSortKey);
+        if (out.stale) openModal("Ticker Refresh", out.message || `${ticker} is still cached.`);
+      } catch (err) {
+        openModal("Ticker Refresh", `Could not refresh ${ticker}: ${err}`);
+      } finally {
+        hideLoading();
+      }
     });
 
     {% if data %}
@@ -1265,6 +1374,18 @@
         const confCell = row.nextElementSibling?.querySelector(".horizon-conf-cell");
         if (confCell) confCell.textContent = Number(probConf[selectedH] || 0).toFixed(2);
       });
+      applySignalFilterLocal();
+    };
+    const applySignalFilterLocal = () => {
+      const enabled = Array.from(document.querySelectorAll('#signalFilterForm input[name="include_signals"]:checked')).map(x => (x.value || "").trim());
+      const allow = new Set(enabled);
+      document.querySelectorAll("tr.rec-row").forEach(row => {
+        const sig = (row.querySelector("td:nth-child(4) .buy-pill")?.innerText || "").trim();
+        const show = allow.has(sig);
+        row.style.display = show ? "" : "none";
+        const detail = row.nextElementSibling;
+        if (detail) detail.style.display = show ? "" : "none";
+      });
     };
     const sortRows = (sortKey) => {
       const tbody = document.getElementById("recoBody");
@@ -1332,6 +1453,7 @@
     renderTop();
     renderRecommendationRows();
     sortRows("strength");
+    applySignalFilterLocal();
     const setHorizonActive = (horizon) => {
       document.querySelectorAll(".horizon-tab, .search-horizon-tab, .lookup-horizon-tab").forEach(t => t.classList.remove("active"));
       document.querySelectorAll(`.horizon-tab[data-horizon="${horizon}"]`).forEach(t => t.classList.add("active"));

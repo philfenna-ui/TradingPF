@@ -19,13 +19,16 @@ class HeadlineBrief:
 
 class MacroHeadlineBriefingEngine:
     """
-    Pulls latest US/EU market-impact headlines and creates an actionable brief.
+    Pulls latest US/EU/Asia/Middle-East market-impact headlines and creates an actionable brief.
     """
 
     FEEDS = [
         ("us_markets", "https://news.google.com/rss/search?q=US+stocks+markets+finance&hl=en-US&gl=US&ceid=US:en"),
         ("europe_markets", "https://news.google.com/rss/search?q=Europe+stocks+markets+finance&hl=en-GB&gl=GB&ceid=GB:en"),
+        ("asia_markets", "https://news.google.com/rss/search?q=Asia+stocks+markets+finance+China+Japan+India+Korea&hl=en-US&gl=US&ceid=US:en"),
+        ("middle_east", "https://news.google.com/rss/search?q=Middle+East+markets+oil+shipping+conflict+Iran+Israel+Gulf&hl=en-US&gl=US&ceid=US:en"),
         ("world_macro", "https://news.google.com/rss/search?q=world+news+geopolitics+central+bank+elections+trade+sanctions+energy+shipping+health+disaster&hl=en-US&gl=US&ceid=US:en"),
+        ("defense_geo", "https://news.google.com/rss/search?q=war+military+defense+missile+naval+airstrike+ceasefire+NATO&hl=en-US&gl=US&ceid=US:en"),
         ("major_events", "https://news.google.com/rss/search?q=war+peace+treaty+earthquake+hurricane+flood+sanctions+pipeline+attack&hl=en-US&gl=US&ceid=US:en"),
         ("world_general", "https://news.google.com/rss/search?q=global+breaking+news+conflict+diplomacy+natural+disaster+outbreak+infrastructure+cyberattack&hl=en-US&gl=US&ceid=US:en"),
     ]
@@ -35,6 +38,8 @@ class MacroHeadlineBriefingEngine:
         ("energy", ["oil", "gas", "opec", "supply", "shipping"], ["XLE", "USO", "XOM", "CVX"], "Watch energy complex for supply-driven repricing."),
         ("rates", ["inflation", "fed", "ecb", "rate", "yield"], ["TLT", "IEF", "KRE", "XLF"], "Review rates-sensitive sectors and duration exposure."),
         ("technology", ["ai", "chip", "semiconductor", "cloud"], ["NVDA", "AMD", "MSFT", "QQQ"], "Track growth/tech beta for narrative acceleration."),
+        ("asia_risk", ["china", "taiwan", "south china sea", "boj", "pboe", "japan", "korea", "india"], ["EEM", "FXI", "EWJ", "INDA", "GLD"], "Track Asia-driven risk transfer into commodities, FX, and global beta."),
+        ("middle_east_risk", ["iran", "israel", "gaza", "red sea", "hormuz", "gulf"], ["USO", "XLE", "LMT", "RTX", "GLD"], "Monitor Middle East escalation/de-escalation for energy, defense, and risk hedges."),
         ("risk_off", ["recession", "downgrade", "crisis", "default"], ["GLD", "TLT", "XLU"], "Consider defensive tilt and hedge overlays."),
     ]
     MAJOR_EVENT_MAP = [
@@ -139,7 +144,29 @@ class MacroHeadlineBriefingEngine:
                 continue
             seen.add(t)
             dedup.append(h)
-        dedup = dedup[:15]
+        # Preserve regional diversity and prevent defense/geopolitical headlines from being dropped.
+        region_limits = {
+            "us_markets": 4,
+            "europe_markets": 4,
+            "asia_markets": 4,
+            "middle_east": 4,
+            "world_macro": 3,
+            "defense_geo": 4,
+            "major_events": 3,
+            "world_general": 3,
+        }
+        selected: list[dict] = []
+        region_counts: dict[str, int] = {}
+        for h in dedup:
+            r = h.get("region", "")
+            lim = int(region_limits.get(r, 2))
+            if region_counts.get(r, 0) >= lim:
+                continue
+            selected.append(h)
+            region_counts[r] = region_counts.get(r, 0) + 1
+            if len(selected) >= 22:
+                break
+        dedup = selected
         summary, actions, major_events = self._summarize(dedup)
         return HeadlineBrief(
             headlines=dedup,

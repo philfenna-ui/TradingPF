@@ -4,7 +4,8 @@ from pathlib import Path
 import sys
 import json
 import os
-from datetime import datetime, timezone
+import re
+from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 
 from flask import Flask, jsonify, redirect, render_template, request, url_for
@@ -26,7 +27,9 @@ LAST_DATA: dict | None = None
 LAST_CONTROL_KEY: str | None = None
 WATCHLIST_PATH = BASE_DIR / "logs" / "watchlist.json"
 LAST_PAYLOAD_PATH = BASE_DIR / "logs" / "last_full_payload.json"
+DISCOVERY_CACHE_PATH = BASE_DIR / "logs" / "discovery_top1000_cache.json"
 ALL_SIGNALS = ["Strong Buy", "Buy", "Accumulate", "Watch", "Avoid"]
+DEFAULT_INCLUDED_SIGNALS = ["Strong Buy", "Buy", "Accumulate"]
 DISCOVERY_UNIVERSE = [
     "SPY","QQQ","IWM","DIA","VTI","TLT","IEF","LQD","HYG","GLD","SLV","USO","XLE","XLF","XLK","XLV","XLI","XLP","XLY","XLU",
     "AAPL","MSFT","NVDA","AMZN","META","GOOGL","TSLA","AMD","AVGO","ORCL","CRM","NFLX","INTC","QCOM","ADBE",
@@ -37,15 +40,167 @@ DISCOVERY_UNIVERSE = [
     "CAT","DE","GE","HON",
     "BTC-USD","ETH-USD",
 ]
-DISCOVERY_UNIVERSE_EXTENDED = DISCOVERY_UNIVERSE + [
-    "COST","WMT","HD","LOW","MCD","SBUX","KO","PEP","NKE","DIS","CMCSA","T","VZ","TMUS",
-    "SHOP","UBER","ABNB","PYPL","INTU","NOW","SNOW","PLTR","PANW","CRWD","ZS",
-    "MRK","ABBV","BMY","AMGN","GILD","ISRG","DHR","TMO","MDT","SYK",
-    "AXP","BK","C","USB","PNC","COF","SPGI","ICE","CME",
-    "EOG","MPC","PSX","VLO","OXY","KMI","ET","ENB",
-    "DAL","UAL","AAL","LUV","UPS","FDX","CSX","NSC","UNP",
-    "BABA","PDD","TSM","ASML","SAP","SHEL","BP","RDSA.AS","EEM","EFA",
-]
+
+
+def _load_discovery_from_cache(max_age_hours: float = 12.0) -> list[str] | None:
+    if not DISCOVERY_CACHE_PATH.exists():
+        return None
+    try:
+        raw = json.loads(DISCOVERY_CACHE_PATH.read_text(encoding="utf-8"))
+        saved_at = datetime.fromisoformat(str(raw.get("saved_at", "")))
+        if datetime.now(timezone.utc) - saved_at.astimezone(timezone.utc) > timedelta(hours=max_age_hours):
+            return None
+        symbols = [str(x).upper() for x in raw.get("symbols", []) if str(x).strip()]
+        return symbols if symbols else None
+    except Exception:
+        return None
+
+
+def _save_discovery_cache(symbols: list[str]) -> None:
+    try:
+        DISCOVERY_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"saved_at": datetime.now(timezone.utc).isoformat(), "symbols": symbols}
+        DISCOVERY_CACHE_PATH.write_text(json.dumps(payload), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _fetch_us_listed_symbols() -> list[str]:
+    session = requests.Session()
+    headers = {"User-Agent": "Mozilla/5.0"}
+    symbols: set[str] = set()
+    # Official Nasdaq symbol directories (NASDAQ + NYSE/AMEX/others).
+    feeds = [
+        ("https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt", "nasdaq"),
+        ("https://www.nasdaqtrader.com/dynamic/symdir/otherlisted.txt", "other"),
+    ]
+    for url, kind in feeds:
+        try:
+            resp = session.get(url, timeout=10, headers=headers)
+            resp.raise_for_status()
+            lines = [ln.strip() for ln in resp.text.splitlines() if ln.strip()]
+            if len(lines) < 3:
+                continue
+            # Skip header and footer lines.
+            for ln in lines[1:-1]:
+                parts = ln.split("|")
+                if kind == "nasdaq":
+                    if len(parts) < 7:
+                        continue
+                    sym = parts[0].strip().upper()
+                    test_issue = parts[3].strip().upper()
+                    is_etf = parts[6].strip().upper()
+                    if test_issue == "Y" or is_etf == "Y":
+                        continue
+                else:
+                    if len(parts) < 7:
+                        continue
+                    sym = parts[0].strip().upper()
+                    is_etf = parts[4].strip().upper()
+                    test_issue = parts[6].strip().upper()
+                    if test_issue == "Y" or is_etf == "Y":
+                        continue
+                # Keep common equity-like tickers; drop obvious derivatives/structured symbols.
+                if not re.fullmatch(r"[A-Z][A-Z0-9.\-]{0,6}", sym):
+                    continue
+                if any(x in sym for x in ["$", "^", "/"]):
+                    continue
+                symbols.add(sym)
+        except Exception:
+            continue
+    return sorted(symbols)
+
+
+def _fetch_top_1000_most_active() -> list[str]:
+    # Use Nasdaq screener as the primary broad-company universe source (1000 symbols).
+    session = requests.Session()
+    headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
+    out: list[str] = []
+    seen: set[str] = set()
+    for offset in (0, 1000, 2000):
+        try:
+            resp = session.get(
+                "https://api.nasdaq.com/api/screener/stocks",
+                params={"tableonly": "true", "limit": 1000, "offset": offset},
+                timeout=15,
+                headers=headers,
+            )
+            resp.raise_for_status()
+            rows = ((((resp.json() or {}).get("data") or {}).get("table") or {}).get("rows") or [])
+            if not rows:
+                break
+            for r in rows:
+                sym = str(r.get("symbol", "")).upper().strip()
+                if not sym or sym in seen:
+                    continue
+                if not re.fullmatch(r"[A-Z][A-Z0-9.\-]{0,6}", sym):
+                    continue
+                seen.add(sym)
+                out.append(sym)
+                if len(out) >= 1000:
+                    return out
+        except Exception:
+            break
+    if len(out) >= 1000:
+        return out[:1000]
+
+    # Fallback: rank broad US listed company universe by Yahoo regular market volume.
+    candidates = _fetch_us_listed_symbols()
+    if not candidates:
+        return out
+    session = requests.Session()
+    headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
+
+    # Rank candidates by regular market volume via Yahoo quote endpoint.
+    ranked: list[tuple[str, float]] = []
+    syms = sorted(candidates)
+    for i in range(0, len(syms), 200):
+        chunk = syms[i : i + 200]
+        try:
+            resp = session.get(
+                "https://query1.finance.yahoo.com/v7/finance/quote",
+                params={"symbols": ",".join(chunk)},
+                timeout=10,
+                headers=headers,
+            )
+            resp.raise_for_status()
+            res = (((resp.json() or {}).get("quoteResponse") or {}).get("result") or [])
+            for q in res:
+                sym = str(q.get("symbol", "")).upper().strip()
+                qtype = str(q.get("quoteType", "")).upper().strip()
+                vol = float(q.get("regularMarketVolume") or 0.0)
+                if sym and qtype == "EQUITY":
+                    ranked.append((sym, vol))
+        except Exception:
+            continue
+
+    ranked.sort(key=lambda x: x[1], reverse=True)
+    out = [s for s, _ in ranked if s]
+    # Keep unique in-ranked order.
+    uniq: list[str] = []
+    seen: set[str] = set()
+    for s in out:
+        if s in seen:
+            continue
+        seen.add(s)
+        uniq.append(s)
+        if len(uniq) >= 1000:
+            break
+    if uniq:
+        return uniq
+    return out
+
+
+def _get_discovery_universe_top1000() -> list[str]:
+    cached = _load_discovery_from_cache(max_age_hours=12.0)
+    if cached:
+        return cached
+    fetched = _fetch_top_1000_most_active()
+    if fetched:
+        _save_discovery_cache(fetched)
+        return fetched
+    # Safe fallback if upstream screener is unavailable/rate-limited.
+    return DISCOVERY_UNIVERSE
 
 
 def _empty_dashboard_data() -> dict:
@@ -111,7 +266,8 @@ def _run_with_signal_refill(
             include_signals=include_signals,
         )
 
-    # Fast refill mode: single discovery pass (main pipeline now backfills nearest signals).
+    # Discovery mode: scan top 1,000 most active companies (cached), then rank/filter.
+    discovery_universe = _get_discovery_universe_top1000()
     first = run_pipeline(
         config_path=config_path,
         confidence_threshold=0.0,
@@ -119,7 +275,7 @@ def _run_with_signal_refill(
         disabled_modules=disabled_modules,
         ranking_profile=ranking_profile,
         include_signals=include_signals,
-        universe_override=DISCOVERY_UNIVERSE,
+        universe_override=discovery_universe,
     )
     return first
 
@@ -245,7 +401,7 @@ def index():
         "risk_tolerance": 0.5,
         "ranking_profile": "balanced",
         "disabled_modules": [],
-        "include_signals": ALL_SIGNALS.copy(),
+        "include_signals": DEFAULT_INCLUDED_SIGNALS.copy(),
         "signal_search_mode": False,
     }
     try:
@@ -269,10 +425,10 @@ def run_dashboard():
     disabled_modules = request.form.getlist("disabled_modules")
     include_signals = request.form.getlist("include_signals")
     if not include_signals:
-        include_signals = ALL_SIGNALS.copy()
+        include_signals = DEFAULT_INCLUDED_SIGNALS.copy()
     ticker_search = str(request.form.get("ticker_search", "")).strip()
     override = [x.strip().upper() for x in ticker_search.replace(";", ",").split(",") if x.strip()]
-    signal_search_mode = set(include_signals) != set(ALL_SIGNALS)
+    signal_search_mode = set(include_signals) != set(DEFAULT_INCLUDED_SIGNALS)
     ctl_key = _controls_key(confidence_threshold, risk_tolerance, ranking_profile, disabled_modules, include_signals)
     try:
         if override and LAST_DATA is not None and LAST_CONTROL_KEY == ctl_key:
@@ -346,9 +502,9 @@ def api_run():
     payload = request.json if request.is_json else {}
     config_path = _resolve_config_path(payload.get("config_path", DEFAULT_CONFIG))
     ticker_search = str(payload.get("ticker_search", "")).strip()
-    include_signals = list(payload.get("include_signals", ALL_SIGNALS))
+    include_signals = list(payload.get("include_signals", DEFAULT_INCLUDED_SIGNALS))
     override = [x.strip().upper() for x in ticker_search.replace(";", ",").split(",") if x.strip()]
-    signal_search_mode = set(include_signals) != set(ALL_SIGNALS)
+    signal_search_mode = set(include_signals) != set(DEFAULT_INCLUDED_SIGNALS)
     data = _run_with_signal_refill(
         config_path=config_path,
         confidence_threshold=float(payload.get("confidence_threshold", 0.5)),
@@ -379,7 +535,7 @@ def api_run():
 def scan_ticker(ticker: str):
     global LAST_DATA, LAST_CONTROL_KEY
     t = ticker.strip().upper()
-    include_signals = ALL_SIGNALS.copy()
+    include_signals = DEFAULT_INCLUDED_SIGNALS.copy()
     data = run_pipeline(config_path=DEFAULT_CONFIG, universe_override=[t], include_signals=include_signals)
     LAST_DATA = data
     _save_last_payload(data)
@@ -432,6 +588,59 @@ def api_ticker_suggest():
     return jsonify(_fallback_suggestions(q))
 
 
+@app.post("/api/refresh_ticker")
+def api_refresh_ticker():
+    global LAST_DATA
+    payload = request.json if request.is_json else {}
+    ticker = str(payload.get("ticker", "")).strip().upper()
+    if not ticker:
+        return jsonify({"ok": False, "message": "Ticker is required."}), 400
+    try:
+        config_path = _resolve_config_path(payload.get("config_path", DEFAULT_CONFIG))
+        confidence_threshold = float(payload.get("confidence_threshold", 0.5))
+        risk_tolerance = float(payload.get("risk_tolerance", 0.5))
+        ranking_profile = str(payload.get("ranking_profile", "balanced"))
+        disabled_modules = list(payload.get("disabled_modules", []))
+        include_signals = list(payload.get("include_signals", DEFAULT_INCLUDED_SIGNALS)) or DEFAULT_INCLUDED_SIGNALS
+
+        refreshed = run_pipeline(
+            config_path=config_path,
+            confidence_threshold=confidence_threshold,
+            risk_tolerance=risk_tolerance,
+            disabled_modules=disabled_modules,
+            ranking_profile=ranking_profile,
+            universe_override=[ticker],
+            include_signals=include_signals,
+        )
+        recs = refreshed.get("recommendations", [])
+        if not recs:
+            return jsonify({"ok": False, "message": f"No refreshed recommendation available for {ticker}."}), 404
+
+        rec = recs[0]
+        stale = bool(rec.get("stale_data_used", False))
+        if stale:
+            age = float(rec.get("stale_age_hours", 0.0))
+            msg = (
+                f"{ticker} is still using cached data ({age:.1f}h old). "
+                "Live source may be rate-limited, unavailable, or market feed unchanged."
+            )
+        else:
+            msg = f"{ticker} refreshed with latest available data."
+
+        # Keep current in-memory payload aligned where possible.
+        if LAST_DATA is not None:
+            for key in ("recommendations", "search_results"):
+                arr = LAST_DATA.get(key) or []
+                for i, item in enumerate(arr):
+                    if str(item.get("ticker", "")).upper() == ticker:
+                        arr[i] = rec
+                LAST_DATA[key] = arr
+
+        return jsonify({"ok": True, "ticker": ticker, "stale": stale, "message": msg, "recommendation": rec})
+    except Exception as exc:
+        return jsonify({"ok": False, "message": f"Refresh failed for {ticker}: {exc}"}), 500
+
+
 @app.post("/paper_trade")
 def paper_trade():
     global LAST_DATA
@@ -443,7 +652,7 @@ def paper_trade():
         "risk_tolerance": float(request.form.get("risk_tolerance", 0.5)),
         "ranking_profile": str(request.form.get("ranking_profile", "balanced")),
         "disabled_modules": request.form.getlist("disabled_modules"),
-        "include_signals": request.form.getlist("include_signals") or ["Strong Buy", "Buy", "Accumulate", "Watch", "Avoid"],
+        "include_signals": request.form.getlist("include_signals") or DEFAULT_INCLUDED_SIGNALS.copy(),
         "signal_search_mode": False,
     }
     ticker_search = str(request.form.get("ticker_search", "")).strip()
@@ -471,7 +680,7 @@ def watchlist_add():
         "risk_tolerance": float(request.form.get("risk_tolerance", 0.5)),
         "ranking_profile": str(request.form.get("ranking_profile", "balanced")),
         "disabled_modules": request.form.getlist("disabled_modules"),
-        "include_signals": request.form.getlist("include_signals") or ["Strong Buy", "Buy", "Accumulate", "Watch", "Avoid"],
+        "include_signals": request.form.getlist("include_signals") or DEFAULT_INCLUDED_SIGNALS.copy(),
         "signal_search_mode": False,
     }
     ticker_search = str(request.form.get("ticker_search", "")).strip()
@@ -520,7 +729,7 @@ def watchlist_remove():
         "risk_tolerance": float(request.form.get("risk_tolerance", 0.5)),
         "ranking_profile": str(request.form.get("ranking_profile", "balanced")),
         "disabled_modules": request.form.getlist("disabled_modules"),
-        "include_signals": request.form.getlist("include_signals") or ["Strong Buy", "Buy", "Accumulate", "Watch", "Avoid"],
+        "include_signals": request.form.getlist("include_signals") or DEFAULT_INCLUDED_SIGNALS.copy(),
         "signal_search_mode": False,
     }
     ticker_search = str(request.form.get("ticker_search", "")).strip()

@@ -194,19 +194,6 @@ def run_pipeline(
     allowed_signals = include_signals or ["Strong Buy", "Buy", "Accumulate", "Watch", "Avoid"]
     recs_filtered = [r for r in recs_all if r.buy_category in allowed_signals]
     top_n = int(cfg.scoring.get("top_n", 5))
-    # If strict filter yields too few names, backfill with nearest signal classes
-    # so the table can still populate up to top_n.
-    if len(recs_filtered) < top_n and set(allowed_signals) != {"Strong Buy", "Buy", "Accumulate", "Watch", "Avoid"}:
-        rank = {"Strong Buy": 5, "Buy": 4, "Accumulate": 3, "Watch": 2, "Avoid": 1}
-        target_ranks = [rank[s] for s in allowed_signals if s in rank]
-        remaining = [r for r in recs_all if r not in recs_filtered]
-        remaining.sort(
-            key=lambda r: (
-                min(abs(rank.get(r.buy_category, 3) - tr) for tr in target_ranks) if target_ranks else 99,
-                -r.institutional_score,
-            )
-        )
-        recs_filtered.extend(remaining[: max(0, top_n - len(recs_filtered))])
     recs = recs_filtered[:top_n]
 
     cross_asset = CrossAssetIntelligenceEngine().compute(bundles_typed)

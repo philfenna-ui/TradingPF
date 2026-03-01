@@ -298,6 +298,8 @@ class LiveYahooFREDProvider:
             ("war defense stocks", "geopolitics"),
             ("geopolitical risk markets", "macro"),
             ("oil supply disruption", "energy"),
+            ("asia markets china japan india korea stocks", "asia"),
+            ("middle east markets oil gulf shipping red sea hormuz", "middle_east"),
             ("global breaking news diplomacy sanctions", "world"),
             ("natural disasters earthquake hurricane flood wildfire", "world"),
             ("global outbreak public health alert", "world"),
