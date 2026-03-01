@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trading-pf"
+version = "0.1.0"
+description = "Institutional-grade multi-strategy quantitative intelligence and trading research platform."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26",
+  "pandas>=2.1",
+  "scikit-learn>=1.4",
+  "PyYAML>=6.0",
+  "Flask>=3.0",
+  "pytest>=8.2",
+  "yfinance>=0.2.54",
+  "requests>=2.32",
+]
+
+[tool.setuptools]
+include-package-data = true

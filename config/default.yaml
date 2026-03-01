@@ -1,0 +1,79 @@
+runtime:
+  environment: "research"
+  timezone: "America/New_York"
+  max_workers: 8
+  random_seed: 42
+
+data:
+  provider: "live_yahoo_fred"
+  daily_lookback_days: 520
+  intraday_lookback_days: 30
+  intraday_interval_minutes: 30
+  universe:
+    - SPY
+    - QQQ
+    - IWM
+    - TLT
+    - GLD
+    - USO
+    - XLE
+    - XLF
+    - XLV
+    - XLI
+    - NVDA
+    - MSFT
+    - AAPL
+    - AMZN
+    - META
+    - TSLA
+    - JPM
+    - BAC
+    - LMT
+    - NOC
+    - RTX
+    - GD
+    - BTC-USD
+    - ETH-USD
+
+scoring:
+  horizons:
+    - "1D"
+    - "2D"
+    - "1W"
+    - "6M"
+  top_n: 20
+  weights:
+    technical: 0.14
+    ml_probability: 0.15
+    options_flow: 0.12
+    dark_pool: 0.1
+    catalyst: 0.1
+    liquidity_pattern: 0.1
+    macro_alignment: 0.14
+    volatility_adjustment: 0.08
+    pairs: 0.07
+
+risk:
+  max_daily_drawdown_pct: 0.025
+  var_conf_levels: [0.95, 0.99]
+  max_single_asset_weight: 0.2
+  max_sector_weight: 0.35
+  tail_risk_trigger: 0.75
+  regime_derisk_multiplier:
+    crisis: 0.4
+    high_volatility: 0.6
+    bear: 0.75
+    sideways: 0.9
+    bull: 1.0
+
+execution:
+  broker: "paper"
+  manual_confirmation: true
+  default_slippage_bps: 5
+  stop_loss_atr_mult: 1.5
+  take_profit_atr_mult: 3.0
+
+retraining:
+  enabled: true
+  cadence_days: 7
+  min_new_samples: 500

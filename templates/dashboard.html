@@ -1,0 +1,1300 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trading | Institutional Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #eef5fb;
+      --panel: #ffffff;
+      --ink: #0f172a;
+      --muted: #5b6b7f;
+      --line: #d8e5f3;
+      --accent: #2563eb;
+      --green1: #bbf7d0;
+      --green2: #16a34a;
+      --red1: #fecaca;
+      --red2: #dc2626;
+      --amber: #f59e0b;
+      --purple: #7e22ce;
+    }
+    body.dark {
+      --bg: #0c1525;
+      --panel: #121f33;
+      --ink: #dbe7ff;
+      --muted: #8ea0c6;
+      --line: #22314d;
+      --accent: #3b82f6;
+    }
+    body.dark a,
+    body.dark a:visited,
+    body.dark a:hover,
+    body.dark a:active {
+      color: #ffffff;
+    }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Inter", sans-serif;
+      background: radial-gradient(circle at 10% -20%, #dceefe, var(--bg) 42%);
+      color: var(--ink);
+      transition: background .2s ease;
+    }
+    .wrap { max-width: 1400px; margin: 20px auto; padding: 0 16px 40px; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 14px;
+      box-shadow: 0 8px 20px rgba(10, 25, 47, 0.08);
+    }
+    .topbar { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+    .title { margin: 0; font-size: 1.35rem; }
+    .muted { color: var(--muted); }
+    .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .grid-2 { display: grid; gap: 12px; grid-template-columns: 1.1fr 1fr; }
+    .grid-3 { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    @media (max-width: 980px) { .grid-2 { grid-template-columns: 1fr; } }
+    @media (max-width: 1100px) { .grid-3 { grid-template-columns: 1fr; } }
+    .runbox { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .btn {
+      border: 1px solid var(--line);
+      background: var(--accent);
+      color: #fff;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn.secondary { background: transparent; color: var(--ink); }
+    .controls { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .control { border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+    .control label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .control input[type="range"] { width: 100%; }
+    .typeahead-wrap { position: relative; }
+    .suggestions {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 100%;
+      z-index: 40;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      max-height: 240px;
+      overflow-y: auto;
+      display: none;
+    }
+    .suggestion-item {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .suggestion-item:hover { background: rgba(37,99,235,.12); }
+    .compare-box {
+      margin-top: 8px;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      min-height: 42px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .compare-pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 8px;
+      background: rgba(37,99,235,.14);
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .compare-pill button {
+      border: 0;
+      background: transparent;
+      color: var(--ink);
+      cursor: pointer;
+      font-weight: 700;
+      padding: 0;
+      line-height: 1;
+    }
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      border: 1px solid var(--line);
+      background: rgba(37,99,235,.07);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .chip.active { background: var(--accent); color: #fff; }
+    .signal-chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      user-select: none;
+      background: rgba(37,99,235,.08);
+    }
+    .signal-chip input { display: none; }
+    .signal-chip.on {
+      background: #16a34a;
+      color: #fff;
+      border-color: #15803d;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    .buy-pill, .mock-pill {
+      display: inline-block; border-radius: 999px; font-size: 11px; font-weight: 700; padding: 3px 8px; color: #fff;
+    }
+    .mock-pill { background: var(--purple); margin-left: 6px; }
+    .old-pill { background: #f59e0b; margin-left: 6px; display: inline-block; border-radius: 999px; font-size: 11px; font-weight: 700; padding: 3px 8px; color: #fff; }
+    .watch-btn {
+      border: 1px solid var(--line);
+      background: transparent;
+      border-radius: 6px;
+      padding: 2px 6px;
+      cursor: pointer;
+      margin-left: 4px;
+    }
+    .row-mock td { background: rgba(126,34,206,.12); }
+    .strength-bar {
+      width: 120px; height: 10px; border-radius: 999px; background: #e2e8f0; overflow: hidden;
+    }
+    .strength-fill { height: 100%; border-radius: 999px; }
+    .gauge {
+      height: 12px; border-radius: 999px; background: #e2e8f0; overflow: hidden; width: 100%;
+    }
+    .gauge > span {
+      display: block; height: 100%;
+      background: linear-gradient(90deg, #1d4ed8, #22c55e);
+    }
+    .trend-strip { display: flex; gap: 1px; }
+    .trend-strip span { width: 5px; height: 14px; border-radius: 2px; display: inline-block; }
+    .metric { font-size: 13px; }
+    .warn { color: #ef4444; font-weight: 700; }
+    .term-btn {
+      border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 999px; padding: 4px 8px; font-size: 11px; cursor: pointer;
+    }
+    th.help-col {
+      cursor: pointer;
+      text-decoration: underline dotted;
+      text-underline-offset: 2px;
+    }
+    .help-icon {
+      display: inline-block;
+      margin-left: 4px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 1px solid var(--line);
+      font-size: 10px;
+      line-height: 14px;
+      text-align: center;
+      cursor: pointer;
+      color: var(--muted);
+      background: transparent;
+    }
+    .details { border: 1px solid var(--line); border-radius: 10px; padding: 8px; margin-top: 8px; }
+    .modal {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      align-items: center; justify-content: center; z-index: 999; padding: 16px;
+    }
+    .modal-content {
+      width: min(620px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+    }
+  </style>
+</head>
+<body class="dark">
+  <div class="wrap">
+    <div class="panel">
+      <div class="topbar">
+        <div>
+          <h1 class="title">Trading Institutional Quant Intelligence Dashboard</h1>
+          <div class="muted">Dynamic live pipeline with calibrated multi-horizon modeling and explainable recommendations.</div>
+        </div>
+        <div>
+          <button id="themeToggle" class="btn secondary">Toggle Dark Theme</button>
+        </div>
+      </div>
+      <div class="runbox" style="margin-top:10px;">
+        <button class="term-btn" data-term="var">VaR</button>
+        <button class="term-btn" data-term="expected_shortfall">Expected Shortfall</button>
+        <button class="term-btn" data-term="risk_on_off">Risk-On/Risk-Off</button>
+        <button class="term-btn" data-term="iv_rank">IV Rank</button>
+        <button class="term-btn" data-term="cointegration">Cointegration</button>
+      </div>
+      <form method="post" action="/run" style="margin-top:12px;">
+        <input type="hidden" name="config_path" value="{{ config_path }}">
+        <div class="control" style="margin-bottom:10px;">
+          <label>Ticker Search (type symbol or company name, then click a match)</label>
+          <input type="hidden" name="ticker_search" id="tickerSearchHidden" value="{{ ticker_search or '' }}">
+          <div class="typeahead-wrap">
+            <input type="text" id="tickerQuery" autocomplete="off" placeholder="e.g. NVDA, Microsoft, RTX"
+                   style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;">
+            <div id="tickerSuggestions" class="suggestions"></div>
+          </div>
+          <div id="tickerCompareBox" class="compare-box"></div>
+          <div style="margin-top:8px;">
+            <div class="muted" style="font-size:11px; margin-bottom:4px;">Lookup Horizon Filter</div>
+            <div class="chips" id="lookupHorizonTabs">
+              {% for h in ["1D","2D","1W","1M","6M"] %}
+              <button type="button" class="chip lookup-horizon-tab {% if h == '1D' %}active{% endif %}" data-horizon="{{ h }}">{{ h }}</button>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="muted" style="font-size:11px; margin-top:4px;">
+            Selected tickers are added to the comparison box and searched together when you run the pipeline.
+          </div>
+        </div>
+        <div class="controls">
+          <div class="control">
+            <label>Confidence Threshold (<span id="confVal">{{ controls.confidence_threshold }}</span>)</label>
+            <input name="confidence_threshold" id="confSlider" type="range" min="0" max="0.95" step="0.01" value="{{ controls.confidence_threshold }}">
+            <div class="muted" style="font-size:11px; margin-top:6px;">
+              Filters recommendations by minimum model probability confidence.
+              Lower values (0.00-0.35) show more ideas, including weaker setups.
+              Mid values (0.36-0.60) keep moderate-to-strong setups.
+              Higher values (0.61-0.95) are strict and only keep highest-conviction candidates, so list size may shrink.
+              If no BUY signals appear, reduce this first.
+            </div>
+          </div>
+          <div class="control">
+            <label>Risk Tolerance (<span id="riskVal">{{ controls.risk_tolerance }}</span>)</label>
+            <input name="risk_tolerance" id="riskSlider" type="range" min="0" max="1" step="0.01" value="{{ controls.risk_tolerance }}">
+            <div class="muted" style="font-size:11px; margin-top:6px;">
+              Controls weighting style and aggressiveness.
+              Lower values (0.00-0.35) bias toward defensive/macro-stable signals and reduce aggressive setups.
+              Mid values (0.36-0.65) balance growth and protection.
+              Higher values (0.66-1.00) emphasize momentum/options/short-term opportunity and can increase turnover and volatility.
+              Use lower values for capital preservation and higher values for tactical alpha-seeking.
+            </div>
+          </div>
+          <div class="control">
+            <label>Ranking Profile</label>
+            <select name="ranking_profile">
+              <option value="balanced" {% if controls.ranking_profile == "balanced" %}selected{% endif %}>Balanced</option>
+              <option value="conservative" {% if controls.ranking_profile == "conservative" %}selected{% endif %}>Conservative</option>
+              <option value="aggressive" {% if controls.ranking_profile == "aggressive" %}selected{% endif %}>Aggressive</option>
+            </select>
+            <div class="muted" style="font-size:11px; margin-top:6px;">
+              Controls how modules are weighted in ranking.
+              <strong>Balanced</strong>: equalized mix of trend, macro, volatility, and catalyst signals.
+              <strong>Conservative</strong>: prioritizes macro stability, volatility control, and defensive quality; typically lower turnover.
+              <strong>Aggressive</strong>: prioritizes momentum, technicals, options, and short-term catalysts; can raise volatility and turnover.
+              If results feel too reactive, move toward Conservative; if too slow, move toward Aggressive.
+            </div>
+          </div>
+          <div class="control">
+            <label>Disable Modules</label>
+            <details>
+              <summary class="chip" style="display:inline-block;">Disable Modules (Optional)</summary>
+              <div style="margin-top:8px; display:grid; gap:6px;">
+                <label><input type="checkbox" name="disabled_modules" value="technical" {% if "technical" in controls.disabled_modules %}checked{% endif %}> technical - trend, EMA/RSI/MACD, breakout structure</label>
+                <label><input type="checkbox" name="disabled_modules" value="ml_probability" {% if "ml_probability" in controls.disabled_modules %}checked{% endif %}> ml_probability - statistical direction probability model</label>
+                <label><input type="checkbox" name="disabled_modules" value="options_flow" {% if "options_flow" in controls.disabled_modules %}checked{% endif %}> options_flow - unusual options flow and premium pressure</label>
+                <label><input type="checkbox" name="disabled_modules" value="dark_pool" {% if "dark_pool" in controls.disabled_modules %}checked{% endif %}> dark_pool - off-exchange accumulation/distribution proxy</label>
+                <label><input type="checkbox" name="disabled_modules" value="catalyst" {% if "catalyst" in controls.disabled_modules %}checked{% endif %}> catalyst - news narrative clustering and sentiment catalyst strength</label>
+                <label><input type="checkbox" name="disabled_modules" value="liquidity_pattern" {% if "liquidity_pattern" in controls.disabled_modules %}checked{% endif %}> liquidity_pattern - intraday microstructure and continuation/reversal patterns</label>
+                <label><input type="checkbox" name="disabled_modules" value="macro_alignment" {% if "macro_alignment" in controls.disabled_modules %}checked{% endif %}> macro_alignment - cross-asset and macro regime alignment</label>
+                <label><input type="checkbox" name="disabled_modules" value="volatility_adjustment" {% if "volatility_adjustment" in controls.disabled_modules %}checked{% endif %}> volatility_adjustment - implied vs realized vol dislocation</label>
+                <label><input type="checkbox" name="disabled_modules" value="pairs" {% if "pairs" in controls.disabled_modules %}checked{% endif %}> pairs - statistical mean-reversion/pairs opportunity</label>
+                <label><input type="checkbox" name="disabled_modules" value="geo_regime_anomaly" {% if "geo_regime_anomaly" in controls.disabled_modules %}checked{% endif %}> geo_regime_anomaly - regime and anomaly stress scoring</label>
+              </div>
+            </details>
+          </div>
+        </div>
+        <div style="margin-top:10px;">
+          <button type="submit" class="btn">Refresh</button>
+        </div>
+      </form>
+      {% if trade_message %}
+      <p style="color:#15803d;font-weight:700;">{{ trade_message }}</p>
+      {% endif %}
+      {% if error %}
+      <p class="warn">Run failed: {{ error }}</p>
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <h2 style="margin-top:0;">Watchlist</h2>
+      {% if watchlist and watchlist|length > 0 %}
+      <table>
+        <thead><tr><th>Ticker</th><th>Name</th><th>Watched Price</th><th>Current Price</th><th>% Change</th><th>Action</th></tr></thead>
+        <tbody>
+          {% for w in watchlist %}
+          <tr>
+            <td><a href="/scan/{{ w.ticker }}">{{ w.ticker }}</a></td>
+            <td>{{ w.name }}</td>
+            <td>{{ "%.2f"|format(w.watched_price) }}</td>
+            <td>{{ "%.2f"|format(w.current_price) }}</td>
+            <td style="font-weight:700; color:{% if w.pct_change >= 0 %}#16a34a{% else %}#dc2626{% endif %};">
+              {{ "%.2f"|format(w.pct_change) }}%
+            </td>
+            <td>
+              <form method="post" action="/watchlist/remove">
+                <input type="hidden" name="ticker" value="{{ w.ticker }}">
+                <input type="hidden" name="watch_id" value="{{ w.watch_id }}">
+                <input type="hidden" name="ticker_search" value="{{ ticker_search or '' }}">
+                <input type="hidden" name="confidence_threshold" value="{{ controls.confidence_threshold }}">
+                <input type="hidden" name="risk_tolerance" value="{{ controls.risk_tolerance }}">
+                <input type="hidden" name="ranking_profile" value="{{ controls.ranking_profile }}">
+                {% for sig in controls.include_signals %}
+                <input type="hidden" name="include_signals" value="{{ sig }}">
+                {% endfor %}
+                {% for mod in controls.disabled_modules %}
+                <input type="hidden" name="disabled_modules" value="{{ mod }}">
+                {% endfor %}
+                <button type="submit" class="btn secondary">Remove</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="muted">No watched tickers yet. Click the eye icon next to any ticker to add it.</p>
+      {% endif %}
+    </div>
+
+    {% if data %}
+    <div class="panel">
+      <h2 style="margin-top:0;">US + Europe Market Headline Briefing</h2>
+      <p class="muted" style="margin-top:0;">Updated: {{ data.headline_brief.generated_at }}</p>
+      <div class="grid-3">
+        <div>
+          <h3 style="margin:0 0 8px 0; font-size:14px;">US</h3>
+          <ul style="margin:0; padding-left:18px;">
+            {% for h in data.headline_brief.headlines if h.region == "us_markets" %}
+            <li>
+              {% if h.link %}
+              <a href="{{ h.link }}" target="_blank" rel="noopener noreferrer">{{ h.title }}</a>
+              {% else %}
+              {{ h.title }}
+              {% endif %}
+            </li>
+            {% else %}
+            <li class="muted">No current US headlines.</li>
+            {% endfor %}
+          </ul>
+        </div>
+        <div>
+          <h3 style="margin:0 0 8px 0; font-size:14px;">Europe</h3>
+          <ul style="margin:0; padding-left:18px;">
+            {% for h in data.headline_brief.headlines if h.region == "europe_markets" %}
+            <li>
+              {% if h.link %}
+              <a href="{{ h.link }}" target="_blank" rel="noopener noreferrer">{{ h.title }}</a>
+              {% else %}
+              {{ h.title }}
+              {% endif %}
+            </li>
+            {% else %}
+            <li class="muted">No current Europe headlines.</li>
+            {% endfor %}
+          </ul>
+        </div>
+        <div>
+          <h3 style="margin:0 0 8px 0; font-size:14px;">World</h3>
+          <ul style="margin:0; padding-left:18px;">
+            {% for h in data.headline_brief.headlines if h.region in ["world_macro","major_events","world_general"] %}
+            <li>
+              {% if h.link %}
+              <a href="{{ h.link }}" target="_blank" rel="noopener noreferrer">{{ h.title }}</a>
+              {% else %}
+              {{ h.title }}
+              {% endif %}
+            </li>
+            {% else %}
+            <li class="muted">No current world macro headlines.</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+
+      <div style="margin-top:12px; border:1px solid var(--line); border-radius:10px; padding:10px;">
+        <h3 style="margin:0 0 8px 0; font-size:14px;">Summary + Actions</h3>
+        <p style="margin-top:0;">{{ data.headline_brief.summary }}</p>
+        <ul style="padding-left:18px; margin:0;">
+          {% for a in data.headline_brief.actions %}
+          <li>
+            <strong>{{ a.theme }}:</strong> {{ a.action }}
+            {% if a.watch and a.watch|length > 0 %}
+            <div class="muted">Watch: {{ ", ".join(a.watch) }}</div>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+
+        {% if data.headline_brief.major_events and data.headline_brief.major_events|length > 0 %}
+        <div style="margin-top:10px;">
+          <h4 style="margin:0 0 6px 0; font-size:13px;">Major Events (High Impact)</h4>
+          <table>
+            <thead><tr><th>Event</th><th>Severity</th><th>Headline</th><th>Watch</th></tr></thead>
+            <tbody>
+              {% for e in data.headline_brief.major_events %}
+              <tr>
+                <td>{{ e.event_type }}</td>
+                <td style="font-weight:700; color:{% if e.severity == 'High' %}#ef4444{% else %}#f59e0b{% endif %};">{{ e.severity }}</td>
+                <td>{{ e.headline }}</td>
+                <td>{{ ", ".join(e.watch) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="panel grid">
+      <div class="metric"><strong>Last Data Refresh:</strong> {{ data.data_freshness.last_data_refresh }}</div>
+      <div class="metric"><strong>Model Version:</strong> {{ data.model_diagnostics.model_version }}</div>
+      <div class="metric"><strong>Regime:</strong> {{ data.risk_report.regime }}</div>
+      <div class="metric"><strong>Risk Heat Index:</strong> {{ "%.1f"|format(data.risk_report.tail_risk_probability * 100) }}</div>
+      <div class="metric"><strong>Volatility Regime Panel:</strong> {{ data.cross_asset_intelligence.risk_on_off_score }}</div>
+      <div class="metric"><strong>Active Narrative:</strong> {{ data.recommendations[0].narrative if data.recommendations else "N/A" }}</div>
+      {% if data.data_variation_warning %}
+      <div class="warn" style="grid-column: 1 / -1;">{{ data.data_variation_warning }}</div>
+      {% endif %}
+      {% if data.model_diagnostics.model_drift_warning %}
+      <div class="warn" style="grid-column: 1 / -1;">Model drift warning triggered.</div>
+      {% endif %}
+    </div>
+
+    {% if data.search_results and data.search_results|length > 0 %}
+    <div class="panel">
+      <div class="topbar">
+        <h2 style="margin-top:0;">Search Results (Ticker Lookup)</h2>
+        <div class="chips" id="searchHorizonTabs">
+          {% for h in ["1D","2D","1W","1M","6M"] %}
+          <button type="button" class="chip search-horizon-tab {% if h == '1D' %}active{% endif %}" data-horizon="{{ h }}">{{ h }}</button>
+          {% endfor %}
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th class="help-col search-sortable-col" data-sort-key="ticker">Ticker <span class="help-icon" data-col-help="ticker">?</span></th>
+            <th class="help-col search-sortable-col" data-sort-key="name">Name <span class="help-icon" data-col-help="name">?</span></th>
+            <th class="help-col search-sortable-col" data-sort-key="category">Category <span class="help-icon" data-col-help="category">?</span></th>
+            <th class="help-col search-sortable-col" data-sort-key="buy_signal">Buy Signal <span class="help-icon" data-col-help="buy_signal">?</span></th>
+            <th class="help-col search-sortable-col" data-sort-key="strength">Strength <span class="help-icon" data-col-help="strength">?</span></th>
+            <th class="help-col search-sortable-col" data-sort-key="confidence_gauge">Confidence Gauge <span class="help-icon" data-col-help="confidence_gauge">?</span></th>
+            <th class="help-col search-sortable-col" data-sort-key="trend_heat_strip">Trend Heat Strip <span class="help-icon" data-col-help="trend_heat_strip">?</span></th>
+            <th class="help-col search-sortable-col" data-sort-key="probability">Probability <span class="help-icon" data-col-help="probability">?</span></th>
+            <th class="help-col search-sortable-col" data-sort-key="current_value">Current Value <span class="help-icon" data-col-help="current_value">?</span></th>
+            <th class="help-col search-sortable-col" data-sort-key="target_range">Target Range <span class="help-icon" data-col-help="target_range">?</span></th>
+            <th class="help-col search-sortable-col" data-sort-key="entry_target_sparkline">Entry/Target Sparkline <span class="help-icon" data-col-help="entry_target_sparkline">?</span></th>
+          </tr>
+        </thead>
+        <tbody id="searchRecoBody">
+          {% for rec in data.search_results %}
+          <tr class="search-rec-row"
+              data-base-score="{{ rec.institutional_score }}"
+              data-horizons='{{ rec.horizons|tojson }}'
+              data-probconf='{{ rec.risk_metrics.probability_confidence|tojson }}'
+              data-spark='{{ rec.sparkline|tojson }}'
+              data-price="{{ rec.current_price }}">
+            <td>
+              <a href="/scan/{{ rec.ticker }}">{{ rec.ticker }}</a>
+              <form method="post" action="/watchlist/add" style="display:inline;">
+                <input type="hidden" name="ticker" value="{{ rec.ticker }}">
+                <input type="hidden" name="name" value="{{ rec.name }}">
+                <input type="hidden" name="watched_price" value="{{ rec.current_price }}">
+                <input type="hidden" name="ticker_search" value="{{ ticker_search or '' }}">
+                <input type="hidden" name="confidence_threshold" value="{{ controls.confidence_threshold }}">
+                <input type="hidden" name="risk_tolerance" value="{{ controls.risk_tolerance }}">
+                <input type="hidden" name="ranking_profile" value="{{ controls.ranking_profile }}">
+                {% for sig in controls.include_signals %}
+                <input type="hidden" name="include_signals" value="{{ sig }}">
+                {% endfor %}
+                {% for mod in controls.disabled_modules %}
+                <input type="hidden" name="disabled_modules" value="{{ mod }}">
+                {% endfor %}
+                <button type="submit" class="watch-btn" title="Add to watchlist">👁</button>
+              </form>
+              {% if rec.stale_data_used %}<span class="old-pill" title="Cached data age">{{ "OLD (" ~ ("%.1f"|format(rec.stale_age_hours)) ~ "h)" }}</span>{% endif %}
+            </td>
+            <td>{{ rec.name }}</td>
+            <td>{{ rec.category }}</td>
+            <td><span class="buy-pill" style="background: {{ rec.buy_color }}">{{ rec.buy_category }}</span></td>
+            <td>
+              <div class="strength-bar">
+                <div class="strength-fill" style="width: {{ rec.institutional_score }}%; background:
+                  {% if rec.institutional_score >= 60 %}linear-gradient(90deg, var(--green1), var(--green2))
+                  {% elif rec.institutional_score <= 40 %}linear-gradient(90deg, var(--red1), var(--red2))
+                  {% else %}var(--amber){% endif %};"></div>
+              </div>
+            </td>
+            <td><div class="gauge"><span style="width: {{ (rec.horizons[0].probability * 100)|round(1) }}%"></span></div></td>
+            <td>
+              <div class="trend-strip">
+                {% for v in rec.sparkline[-18:] %}
+                <span style="background: rgba(22,163,74,{{ 0.2 + (v * 0.8) }});" title="{{ (v*100)|round(1) }}"></span>
+                {% endfor %}
+              </div>
+            </td>
+            <td><span class="prob-cell">{{ "%.1f"|format((rec.horizons | selectattr('horizon','equalto','1D') | list)[0].probability*100) }}%</span></td>
+            <td><span class="price-cell">{{ "%.2f"|format(rec.current_price) }}</span></td>
+            <td><span class="target-cell">{{ "%.2f"|format(rec.horizons[0].target_low) }} - {{ "%.2f"|format(rec.horizons[0].target_high) }}</span></td>
+            <td>
+              <svg width="150" height="40" viewBox="0 0 150 40">
+                {% set pts = rec.sparkline %}
+                {% for i in range(pts|length) %}
+                {% if i > 0 %}
+                <line x1="{{ ((i-1)/(pts|length-1))*150 if pts|length > 1 else 0 }}"
+                      y1="{{ 35 - (pts[i-1]*30) }}"
+                      x2="{{ (i/(pts|length-1))*150 if pts|length > 1 else 150 }}"
+                      y2="{{ 35 - (pts[i]*30) }}" stroke="#2563eb" stroke-width="1.3"/>
+                {% endif %}
+                {% endfor %}
+              </svg>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="11">
+              <details class="details">
+                <summary><strong>Why this trade?</strong> Signal Breakdown</summary>
+                <p><strong>Plain English:</strong></p>
+                <ul style="margin-top:0; padding-left:18px;">
+                  {% for pt in rec.plain_reason_points %}
+                  <li>{{ pt }}</li>
+                  {% endfor %}
+                </ul>
+              </details>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="muted">These are lookup results only. Top Recommendations remain based on the core universe.</p>
+    </div>
+    {% endif %}
+
+    <div class="panel">
+      <h2 style="margin-top:0;">Buy Candidates (Actionable)</h2>
+      {% set buys = data.recommendations | selectattr('action','equalto','BUY') | list %}
+      {% if buys|length > 0 %}
+      <table>
+        <thead><tr><th>Ticker</th><th>Name</th><th>Category</th><th>Signal</th><th>1D Prob</th><th>Plain-English Why</th><th>Paper Trade</th></tr></thead>
+        <tbody>
+          {% for rec in buys %}
+          <tr class="{% if rec.mock_data_used %}row-mock{% endif %}">
+            <td>
+              <a href="/scan/{{ rec.ticker }}">{{ rec.ticker }}</a>
+              <form method="post" action="/watchlist/add" style="display:inline;">
+                <input type="hidden" name="ticker" value="{{ rec.ticker }}">
+                <input type="hidden" name="name" value="{{ rec.name }}">
+                <input type="hidden" name="watched_price" value="{{ rec.current_price }}">
+                <input type="hidden" name="ticker_search" value="{{ ticker_search or '' }}">
+                <input type="hidden" name="confidence_threshold" value="{{ controls.confidence_threshold }}">
+                <input type="hidden" name="risk_tolerance" value="{{ controls.risk_tolerance }}">
+                <input type="hidden" name="ranking_profile" value="{{ controls.ranking_profile }}">
+                {% for sig in controls.include_signals %}
+                <input type="hidden" name="include_signals" value="{{ sig }}">
+                {% endfor %}
+                {% for mod in controls.disabled_modules %}
+                <input type="hidden" name="disabled_modules" value="{{ mod }}">
+                {% endfor %}
+                <button type="submit" class="watch-btn" title="Add to watchlist">👁</button>
+              </form>
+              {% if rec.stale_data_used %}<span class="old-pill" title="Cached data age">{{ "OLD (" ~ ("%.1f"|format(rec.stale_age_hours)) ~ "h)" }}</span>{% endif %}
+            </td>
+            <td>{{ rec.name }}</td>
+            <td>{{ rec.category }}</td>
+            <td><span class="buy-pill" style="background: {{ rec.buy_color }}">{{ rec.buy_category }}</span></td>
+            <td>{{ "%.1f"|format((rec.horizons | selectattr('horizon','equalto','1D') | list)[0].probability*100) }}%</td>
+            <td>
+              <ul style="margin:0; padding-left:16px;">
+                {% for pt in rec.plain_reason_points %}
+                <li>{{ pt }}</li>
+                {% endfor %}
+              </ul>
+            </td>
+            <td>
+              <form method="post" action="/paper_trade">
+                <input type="hidden" name="ticker" value="{{ rec.ticker }}">
+                <input type="hidden" name="side" value="BUY">
+                <input type="hidden" name="qty" value="1">
+                <input type="hidden" name="ticker_search" value="{{ ticker_search or '' }}">
+                <input type="hidden" name="confidence_threshold" value="{{ controls.confidence_threshold }}">
+                <input type="hidden" name="risk_tolerance" value="{{ controls.risk_tolerance }}">
+                <input type="hidden" name="ranking_profile" value="{{ controls.ranking_profile }}">
+                {% for mod in controls.disabled_modules %}
+                <input type="hidden" name="disabled_modules" value="{{ mod }}">
+                {% endfor %}
+                <button type="submit" class="btn">Paper Buy</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="muted">No hard BUY at current thresholds. Best current candidates:</p>
+      <ul>
+        {% for rec in data.recommendations[:3] %}
+        <li>
+          <a href="/scan/{{ rec.ticker }}">{{ rec.ticker }}</a> - {{ rec.buy_category }}
+          <ul style="margin:4px 0 0 0; padding-left:16px;">
+            {% for pt in rec.plain_reason_points %}
+            <li>{{ pt }}</li>
+            {% endfor %}
+          </ul>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <div class="topbar">
+        <h2 style="margin:0;">Top Recommendations (20, Multi-Timeframe)</h2>
+        <div class="chips" id="horizonTabs">
+          {% for h in ["1D","2D","1W","1M","6M"] %}
+          <button type="button" class="chip horizon-tab {% if h == '1D' %}active{% endif %}" data-horizon="{{ h }}">{{ h }}</button>
+          {% endfor %}
+        </div>
+      </div>
+      {% if controls.signal_search_mode %}
+      <p class="muted" style="margin:6px 0 8px 0;">
+        Signal filter search mode is active: scanning an expanded universe to fill up to 20 names for the selected signal filters.
+      </p>
+      {% endif %}
+      <form id="signalFilterForm" method="post" action="/run" style="margin:8px 0 10px 0;">
+        <input type="hidden" name="config_path" value="{{ config_path }}">
+        <input type="hidden" name="ticker_search" value="{{ ticker_search or '' }}">
+        <input type="hidden" name="confidence_threshold" value="{{ controls.confidence_threshold }}">
+        <input type="hidden" name="risk_tolerance" value="{{ controls.risk_tolerance }}">
+        <input type="hidden" name="ranking_profile" value="{{ controls.ranking_profile }}">
+        {% for mod in controls.disabled_modules %}
+        <input type="hidden" name="disabled_modules" value="{{ mod }}">
+        {% endfor %}
+        <div class="chips">
+          {% set sigs = ["Strong Buy","Buy","Accumulate","Watch","Avoid"] %}
+          {% for sig in sigs %}
+          <label class="signal-chip {% if sig in controls.include_signals %}on{% endif %}">
+            <input type="checkbox" name="include_signals" value="{{ sig }}" {% if sig in controls.include_signals %}checked{% endif %}>
+            {{ sig }}
+          </label>
+          {% endfor %}
+        </div>
+      </form>
+      <table>
+        <thead>
+          <tr>
+            <th class="help-col sortable-col" data-sort-key="ticker">Ticker <span class="help-icon" data-col-help="ticker">?</span></th>
+            <th class="help-col sortable-col" data-sort-key="name">Name <span class="help-icon" data-col-help="name">?</span></th>
+            <th class="help-col sortable-col" data-sort-key="category">Category <span class="help-icon" data-col-help="category">?</span></th>
+            <th class="help-col sortable-col" data-sort-key="buy_signal">Buy Signal <span class="help-icon" data-col-help="buy_signal">?</span></th>
+            <th class="help-col sortable-col" data-sort-key="strength">Strength <span class="help-icon" data-col-help="strength">?</span></th>
+            <th class="help-col sortable-col" data-sort-key="confidence_gauge">Confidence Gauge <span class="help-icon" data-col-help="confidence_gauge">?</span></th>
+            <th class="help-col sortable-col" data-sort-key="trend_heat_strip">Trend Heat Strip <span class="help-icon" data-col-help="trend_heat_strip">?</span></th>
+            <th class="help-col sortable-col" data-sort-key="probability">Probability <span class="help-icon" data-col-help="probability">?</span></th>
+            <th class="help-col sortable-col" data-sort-key="current_value">Current Value <span class="help-icon" data-col-help="current_value">?</span></th>
+            <th class="help-col sortable-col" data-sort-key="target_range">Target Range <span class="help-icon" data-col-help="target_range">?</span></th>
+            <th class="help-col sortable-col" data-sort-key="entry_target_sparkline">Entry/Target Sparkline <span class="help-icon" data-col-help="entry_target_sparkline">?</span></th>
+          </tr>
+        </thead>
+        <tbody id="recoBody">
+          {% for rec in data.recommendations %}
+          <tr class="{% if rec.mock_data_used %}row-mock{% endif %} rec-row"
+              data-base-score="{{ rec.institutional_score }}"
+              data-horizons='{{ rec.horizons|tojson }}'
+              data-probconf='{{ rec.risk_metrics.probability_confidence|tojson }}'
+              data-spark='{{ rec.sparkline|tojson }}'
+              data-price="{{ rec.current_price }}">
+            <td>
+              <a href="/scan/{{ rec.ticker }}">{{ rec.ticker }}</a>
+              <form method="post" action="/watchlist/add" style="display:inline;">
+                <input type="hidden" name="ticker" value="{{ rec.ticker }}">
+                <input type="hidden" name="name" value="{{ rec.name }}">
+                <input type="hidden" name="watched_price" value="{{ rec.current_price }}">
+                <input type="hidden" name="ticker_search" value="{{ ticker_search or '' }}">
+                <input type="hidden" name="confidence_threshold" value="{{ controls.confidence_threshold }}">
+                <input type="hidden" name="risk_tolerance" value="{{ controls.risk_tolerance }}">
+                <input type="hidden" name="ranking_profile" value="{{ controls.ranking_profile }}">
+                {% for sig in controls.include_signals %}
+                <input type="hidden" name="include_signals" value="{{ sig }}">
+                {% endfor %}
+                {% for mod in controls.disabled_modules %}
+                <input type="hidden" name="disabled_modules" value="{{ mod }}">
+                {% endfor %}
+                <button type="submit" class="watch-btn" title="Add to watchlist">👁</button>
+              </form>
+              {% if rec.mock_data_used %}<span class="mock-pill" title="Mock fields: {{ ', '.join(rec.mock_fields) }}">MOCK</span>{% endif %}
+              {% if rec.stale_data_used %}<span class="old-pill" title="Cached data age">{{ "OLD (" ~ ("%.1f"|format(rec.stale_age_hours)) ~ "h)" }}</span>{% endif %}
+            </td>
+            <td>{{ rec.name }}</td>
+            <td>{{ rec.category }}</td>
+            <td><span class="buy-pill" style="background: {{ rec.buy_color }}">{{ rec.buy_category }}</span></td>
+            <td>
+              <div class="strength-bar">
+                <div class="strength-fill" style="width: {{ rec.institutional_score }}%; background:
+                  {% if rec.institutional_score >= 60 %}linear-gradient(90deg, var(--green1), var(--green2))
+                  {% elif rec.institutional_score <= 40 %}linear-gradient(90deg, var(--red1), var(--red2))
+                  {% else %}var(--amber){% endif %};"></div>
+              </div>
+            </td>
+            <td>
+              <div class="gauge"><span style="width: {{ (rec.horizons[0].probability * 100)|round(1) }}%"></span></div>
+            </td>
+            <td>
+              <div class="trend-strip">
+                {% for v in rec.sparkline[-18:] %}
+                <span style="background: rgba(22,163,74,{{ 0.2 + (v * 0.8) }});" title="{{ (v*100)|round(1) }}"></span>
+                {% endfor %}
+              </div>
+            </td>
+            <td>
+              {% set p = rec.horizons[0].probability %}
+              <span class="prob-cell">{{ "%.1f"|format(p*100) }}%</span>
+            </td>
+            <td>
+              <span class="price-cell">{{ "%.2f"|format(rec.current_price) }}</span>
+            </td>
+            <td>
+              <span class="target-cell">{{ "%.2f"|format(rec.horizons[0].target_low) }} - {{ "%.2f"|format(rec.horizons[0].target_high) }}</span>
+            </td>
+            <td>
+              <svg width="150" height="40" viewBox="0 0 150 40">
+                {% set pts = rec.sparkline %}
+                {% for i in range(pts|length) %}
+                {% if i > 0 %}
+                <line x1="{{ ((i-1)/(pts|length-1))*150 if pts|length > 1 else 0 }}"
+                      y1="{{ 35 - (pts[i-1]*30) }}"
+                      x2="{{ (i/(pts|length-1))*150 if pts|length > 1 else 150 }}"
+                      y2="{{ 35 - (pts[i]*30) }}" stroke="#2563eb" stroke-width="1.3"/>
+                {% endif %}
+                {% endfor %}
+              </svg>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="11">
+              <details class="details">
+                <summary><strong>Why this trade?</strong> Signal Breakdown</summary>
+                <p><strong>Plain English:</strong></p>
+                <ul style="margin-top:0; padding-left:18px;">
+                  {% for pt in rec.plain_reason_points %}
+                  <li>{{ pt }}</li>
+                  {% endfor %}
+                </ul>
+                <p><strong>Selected Horizon Confidence:</strong> <span class="horizon-conf-cell">{{ "%.2f"|format((rec.risk_metrics.probability_confidence or {}).get('1D', 0.0)) }}</span></p>
+                <table>
+                  <thead>
+                    <tr><th>Component</th><th>Weight</th><th>Raw</th><th>Confidence</th><th>Contribution</th></tr>
+                  </thead>
+                  <tbody>
+                    {% for comp,vals in rec.explainability.items() %}
+                    <tr>
+                      <td>{{ comp }}</td>
+                      <td>{{ "%.3f"|format(vals.weight) }}</td>
+                      <td>{{ "%.2f"|format(vals.raw_score) }}</td>
+                      <td>{{ "%.2f"|format(vals.confidence) }}</td>
+                      <td>{{ "%.3f"|format(vals.weighted_contribution) }}</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </details>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid-2">
+      <div class="panel">
+        <h2 style="margin-top:0;">Multi-Horizon Forecast Comparison</h2>
+        <canvas id="forecastChart" height="180"></canvas>
+      </div>
+      <div class="panel">
+        <h2 style="margin-top:0;">Probability Decay Curve</h2>
+        <canvas id="decayChart" height="180"></canvas>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="panel">
+        <h2 style="margin-top:0;">Performance Validation</h2>
+        <p>Historical accuracy by timeframe and rolling setup win rate.</p>
+        <table>
+          <thead><tr><th>Horizon</th><th>Accuracy</th><th>Rolling Win Rate</th></tr></thead>
+          <tbody>
+            {% for h,v in data.accuracy_panel.items() %}
+            <tr><td>{{ h }}</td><td>{{ "%.2f"|format(v.historical_accuracy) }}</td><td>{{ "%.2f"|format(v.rolling_win_rate) }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p>Sharpe by signal type: {{ data.performance_validation.sharpe_by_signal_type }}</p>
+        <p>Max drawdown by signal type: {{ data.performance_validation.max_drawdown_by_signal_type }}</p>
+      </div>
+      <div class="panel">
+        <h2 style="margin-top:0;">Disagreement Diagnostics</h2>
+        <p>Conservative Top 5: {{ data.alt_rankings.conservative }}</p>
+        <p>Aggressive Top 5: {{ data.alt_rankings.aggressive }}</p>
+        <p>Active controls: {{ data.controls }}</p>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="panel">
+        <h2 style="margin-top:0;">Sector Allocation Pie</h2>
+        <canvas id="sectorPie" height="190"></canvas>
+      </div>
+      <div class="panel">
+        <h2 style="margin-top:0;">Asset Exposure Bar</h2>
+        <canvas id="exposureBar" height="190"></canvas>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="panel">
+        <h2 style="margin-top:0;">Correlation Heatmap</h2>
+        <div id="corrHeat"></div>
+      </div>
+      <div class="panel">
+        <h2 style="margin-top:0;">Horizon Top 5 (Selected)</h2>
+        <div id="horizonTop"></div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="modal" id="termModal">
+    <div class="modal-content">
+      <div class="topbar">
+        <strong id="termTitle"></strong>
+        <button id="closeModal" class="btn secondary">Close</button>
+      </div>
+      <p id="termBody" class="muted"></p>
+    </div>
+  </div>
+
+  <script>
+    const glossary = {
+      var: { title: "Value at Risk (VaR)", body: "Potential loss threshold at a confidence level over a period." },
+      expected_shortfall: { title: "Expected Shortfall", body: "Average loss beyond VaR; tail-risk focused measure." },
+      risk_on_off: { title: "Risk-On / Risk-Off", body: "Composite measure of market appetite for risky vs defensive assets." },
+      iv_rank: { title: "IV Rank", body: "Current implied volatility percentile relative to historical range." },
+      cointegration: { title: "Cointegration", body: "Long-run mean-reverting statistical relationship between assets." }
+    };
+    const columnGlossary = {
+      ticker: { title: "Ticker", body: "The tradable market symbol used to identify the asset." },
+      name: { title: "Name", body: "The company or instrument name resolved from live market metadata." },
+      category: { title: "Category", body: "Industry/asset grouping for quick context (e.g., Military, Technology, Finance)." },
+      buy_signal: { title: "Buy Signal", body: "Action class derived from institutional score and model alignment: BUY, WATCH, or AVOID." },
+      strength: { title: "Strength", body: "Composite signal intensity after weighting module scores and confidence." },
+      confidence_gauge: { title: "Confidence Gauge", body: "Visual representation of selected-horizon probability confidence for the setup." },
+      trend_heat_strip: { title: "Trend Heat Strip", body: "Mini trend intensity map from recent normalized price movement; brighter blocks indicate stronger local momentum." },
+      probability: { title: "Probability", body: "Calibrated chance of favorable direction for the selected horizon (not guaranteed outcome)." },
+      current_value: { title: "Current Value", body: "Latest live price used by the model on this run." },
+      target_range: { title: "Target Range", body: "Model-implied lower/upper expected price band for the selected horizon." },
+      entry_target_sparkline: { title: "Entry/Target Sparkline", body: "Compact path view of recent normalized movement to contextualize entry vs projected target behavior." }
+    };
+
+    document.getElementById("themeToggle")?.addEventListener("click", () => document.body.classList.toggle("dark"));
+    const confSlider = document.getElementById("confSlider");
+    const riskSlider = document.getElementById("riskSlider");
+    if (confSlider) confSlider.addEventListener("input", () => document.getElementById("confVal").innerText = confSlider.value);
+    if (riskSlider) riskSlider.addEventListener("input", () => document.getElementById("riskVal").innerText = riskSlider.value);
+    document.querySelectorAll("#signalFilterForm .signal-chip input").forEach(cb => {
+      cb.addEventListener("change", () => {
+        const lbl = cb.closest(".signal-chip");
+        if (lbl) lbl.classList.toggle("on", cb.checked);
+        document.getElementById("signalFilterForm").submit();
+      });
+    });
+
+    // Ticker autocomplete + comparison box
+    const queryInput = document.getElementById("tickerQuery");
+    const suggBox = document.getElementById("tickerSuggestions");
+    const compareBox = document.getElementById("tickerCompareBox");
+    const hiddenInput = document.getElementById("tickerSearchHidden");
+    let selectedTickers = [];
+    const initialTickerSearch = "{{ ticker_search or '' }}";
+    if (initialTickerSearch.trim()) {
+      selectedTickers = initialTickerSearch.split(",").map(x => x.trim().toUpperCase()).filter(Boolean);
+    }
+    const syncHidden = () => { hiddenInput.value = selectedTickers.join(","); };
+    const renderCompare = () => {
+      compareBox.innerHTML = "";
+      if (!selectedTickers.length) {
+        compareBox.innerHTML = '<span class="muted" style="font-size:12px;">No tickers selected</span>';
+      } else {
+        selectedTickers.forEach(t => {
+          const pill = document.createElement("span");
+          pill.className = "compare-pill";
+          pill.innerHTML = `<span>${t}</span><button type="button" title="Remove">x</button>`;
+          pill.querySelector("button").addEventListener("click", () => {
+            selectedTickers = selectedTickers.filter(x => x !== t);
+            syncHidden();
+            renderCompare();
+          });
+          compareBox.appendChild(pill);
+        });
+      }
+    };
+    const addTicker = (sym) => {
+      const t = String(sym || "").toUpperCase().trim();
+      if (!t) return;
+      if (!selectedTickers.includes(t)) selectedTickers.push(t);
+      syncHidden();
+      renderCompare();
+      queryInput.value = "";
+      suggBox.style.display = "none";
+    };
+    const showSuggestions = (items) => {
+      if (!items.length) {
+        suggBox.style.display = "none";
+        return;
+      }
+      suggBox.innerHTML = "";
+      items.forEach(it => {
+        const row = document.createElement("div");
+        row.className = "suggestion-item";
+        row.innerHTML = `<strong>${it.symbol}</strong> - ${it.name} <span class="muted">(${it.type || "asset"})</span>`;
+        row.addEventListener("click", () => addTicker(it.symbol));
+        suggBox.appendChild(row);
+      });
+      suggBox.style.display = "block";
+    };
+    let suggestTimer = null;
+    queryInput?.addEventListener("input", () => {
+      const q = queryInput.value.trim();
+      if (suggestTimer) clearTimeout(suggestTimer);
+      if (!q) {
+        suggBox.style.display = "none";
+        return;
+      }
+      suggestTimer = setTimeout(async () => {
+        try {
+          const resp = await fetch(`/api/ticker_suggest?q=${encodeURIComponent(q)}`);
+          const items = await resp.json();
+          const filtered = (items || []).filter(it => {
+            const sym = String(it.symbol || "").toLowerCase();
+            const nm = String(it.name || "").toLowerCase();
+            const qq = q.toLowerCase();
+            return sym.includes(qq) || nm.includes(qq);
+          });
+          showSuggestions(filtered);
+        } catch (e) {
+          suggBox.style.display = "none";
+        }
+      }, 220);
+    });
+    queryInput?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const v = queryInput.value.trim().toUpperCase();
+        if (v) addTicker(v);
+      }
+    });
+    document.addEventListener("click", (e) => {
+      if (!suggBox.contains(e.target) && e.target !== queryInput) {
+        suggBox.style.display = "none";
+      }
+    });
+    renderCompare();
+    syncHidden();
+
+    const modal = document.getElementById("termModal");
+    const tt = document.getElementById("termTitle");
+    const tb = document.getElementById("termBody");
+    document.querySelectorAll(".term-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const d = glossary[btn.dataset.term];
+        if (!d) return;
+        tt.innerText = d.title;
+        tb.innerText = d.body;
+        modal.style.display = "flex";
+      });
+    });
+    document.querySelectorAll(".help-icon").forEach(el => {
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const key = el.dataset.colHelp;
+        const d = columnGlossary[key];
+        if (!d) return;
+        tt.innerText = d.title;
+        tb.innerText = d.body;
+        modal.style.display = "flex";
+      });
+    });
+    document.getElementById("closeModal")?.addEventListener("click", () => modal.style.display = "none");
+    modal?.addEventListener("click", e => { if (e.target === modal) modal.style.display = "none"; });
+
+    {% if data %}
+    const dataPayload = {{ data|tojson }};
+    const horizons = ["1D","2D","1W","1M","6M"];
+    const rec0 = dataPayload.recommendations[0] || null;
+    if (rec0) {
+      const probs = horizons.map(h => (rec0.horizons.find(x => x.horizon === h) || {probability:0}).probability * 100);
+      new Chart(document.getElementById("forecastChart"), {
+        type: "line",
+        data: { labels: horizons, datasets: [{ label: rec0.ticker + " Prob %", data: probs, borderColor: "#2563eb", fill: true, backgroundColor: "rgba(37,99,235,.16)" }]},
+        options: { responsive: true, plugins: { legend: { display: true }}}
+      });
+      new Chart(document.getElementById("decayChart"), {
+        type: "bar",
+        data: { labels: horizons, datasets: [{ label: "Probability", data: probs, backgroundColor: ["#1d4ed8","#2563eb","#0ea5e9","#22c55e","#16a34a"] }]},
+        options: { responsive: true }
+      });
+    }
+
+    const sector = dataPayload.risk_report.sector_exposure || {};
+    new Chart(document.getElementById("sectorPie"), {
+      type: "pie",
+      data: { labels: Object.keys(sector), datasets: [{ data: Object.values(sector), backgroundColor: ["#2563eb","#0ea5e9","#22c55e","#f59e0b","#ef4444"] }]},
+      options: { responsive: true }
+    });
+    const exposure = dataPayload.risk_report.asset_class_exposure || {};
+    new Chart(document.getElementById("exposureBar"), {
+      type: "bar",
+      data: { labels: Object.keys(exposure), datasets: [{ data: Object.values(exposure), backgroundColor: "#2563eb" }]},
+      options: { responsive: true }
+    });
+
+    const corr = dataPayload.cross_asset_intelligence.correlation_30d || {};
+    const corrKeys = Object.keys(corr);
+    const corrContainer = document.getElementById("corrHeat");
+    if (corrContainer && corrKeys.length) {
+      let html = "<table><thead><tr><th></th>" + corrKeys.map(k=>`<th>${k}</th>`).join("") + "</tr></thead><tbody>";
+      for (const r of corrKeys) {
+        html += `<tr><th>${r}</th>`;
+        for (const c of corrKeys) {
+          const v = Number((corr[r]||{})[c]||0);
+          const hue = v >= 0 ? 120 : 0;
+          const alpha = Math.min(Math.abs(v), 1);
+          html += `<td style="background: hsla(${hue},70%,50%,${0.1+alpha*0.45});">${v.toFixed(2)}</td>`;
+        }
+        html += "</tr>";
+      }
+      html += "</tbody></table>";
+      corrContainer.innerHTML = html;
+    }
+
+    let selectedH = "1D";
+    let currentSortKey = "strength";
+    let currentSortDir = "desc";
+    const topDiv = document.getElementById("horizonTop");
+    const renderTop = () => {
+      const arr = (dataPayload.horizon_top || {})[selectedH] || [];
+      if (!topDiv) return;
+      let html = "<table><thead><tr><th>Ticker</th><th>Probability</th><th>Score</th><th>Signal</th></tr></thead><tbody>";
+      for (const x of arr) {
+        html += `<tr><td>${x.ticker}</td><td>${(x.probability*100).toFixed(1)}%</td><td>${x.score.toFixed(1)}</td><td>${x.buy_category}</td></tr>`;
+      }
+      html += "</tbody></table>";
+      topDiv.innerHTML = html;
+    };
+    const renderRecommendationRows = () => {
+      document.querySelectorAll(".rec-row, .search-rec-row").forEach(row => {
+        const baseScore = Number(row.dataset.baseScore || 0);
+        const horizons = JSON.parse(row.dataset.horizons || "[]");
+        const probConf = JSON.parse(row.dataset.probconf || "{}");
+        const hz = horizons.find(x => x.horizon === selectedH) || horizons[0] || { probability: 0.5, target_low: 0, target_high: 0 };
+        const probPct = hz.probability * 100;
+        const gauge = row.querySelector(".gauge > span");
+        if (gauge) gauge.style.width = probPct.toFixed(1) + "%";
+        const probCell = row.querySelector(".prob-cell");
+        if (probCell) probCell.textContent = probPct.toFixed(1) + "%";
+        const targetCell = row.querySelector(".target-cell");
+        if (targetCell) targetCell.textContent = Number(hz.target_low).toFixed(2) + " - " + Number(hz.target_high).toFixed(2);
+        const strengthFill = row.querySelector(".strength-fill");
+        if (strengthFill) {
+          const scaled = Math.max(0, Math.min(100, baseScore * (0.6 + 0.8 * hz.probability)));
+          strengthFill.style.width = scaled.toFixed(1) + "%";
+        }
+        const confCell = row.nextElementSibling?.querySelector(".horizon-conf-cell");
+        if (confCell) confCell.textContent = Number(probConf[selectedH] || 0).toFixed(2);
+      });
+    };
+    const sortRows = (sortKey) => {
+      const tbody = document.getElementById("recoBody");
+      if (!tbody) return;
+      if (currentSortKey === sortKey) {
+        currentSortDir = currentSortDir === "asc" ? "desc" : "asc";
+      } else {
+        currentSortKey = sortKey;
+        currentSortDir = "desc";
+      }
+      const pairs = [];
+      const rows = Array.from(tbody.querySelectorAll("tr.rec-row"));
+      rows.forEach(row => {
+        pairs.push({ main: row, detail: row.nextElementSibling });
+      });
+      const scoreFor = (pair) => {
+        const row = pair.main;
+        const horizons = JSON.parse(row.dataset.horizons || "[]");
+        const probConf = JSON.parse(row.dataset.probconf || "{}");
+        const spark = JSON.parse(row.dataset.spark || "[]");
+        const hz = horizons.find(x => x.horizon === selectedH) || horizons[0] || {};
+        const ticker = row.querySelector("td:nth-child(1)")?.innerText.trim() || "";
+        const name = row.querySelector("td:nth-child(2)")?.innerText.trim() || "";
+        const category = row.querySelector("td:nth-child(3)")?.innerText.trim() || "";
+        const buySignal = row.querySelector("td:nth-child(4)")?.innerText.trim() || "";
+        const baseScore = Number(row.dataset.baseScore || 0);
+        const strength = Math.max(0, Math.min(100, baseScore * (0.6 + 0.8 * Number(hz.probability || 0.5))));
+        const conf = Number(probConf[selectedH] || 0);
+        const prob = Number(hz.probability || 0);
+        const price = Number(row.dataset.price || 0);
+        const tgtMid = (Number(hz.target_low || 0) + Number(hz.target_high || 0)) / 2;
+        const sparkLast = spark.length ? Number(spark[spark.length - 1]) : 0;
+        const signalRank = { "Strong Buy": 5, "Buy": 4, "Accumulate": 3, "Watch": 2, "Avoid": 1 }[buySignal] || 0;
+        switch (sortKey) {
+          case "ticker": return ticker.toLowerCase();
+          case "name": return name.toLowerCase();
+          case "category": return category.toLowerCase();
+          case "buy_signal": return signalRank;
+          case "strength": return strength;
+          case "confidence_gauge": return conf;
+          case "trend_heat_strip": return sparkLast;
+          case "probability": return prob;
+          case "current_value": return price;
+          case "target_range": return tgtMid;
+          case "entry_target_sparkline": return sparkLast;
+          default: return strength;
+        }
+      };
+      pairs.sort((a, b) => {
+        const va = scoreFor(a);
+        const vb = scoreFor(b);
+        let cmp = 0;
+        if (typeof va === "string" || typeof vb === "string") {
+          cmp = String(va).localeCompare(String(vb));
+        } else {
+          cmp = Number(va) - Number(vb);
+        }
+        return currentSortDir === "asc" ? cmp : -cmp;
+      });
+      pairs.forEach(p => {
+        tbody.appendChild(p.main);
+        if (p.detail) tbody.appendChild(p.detail);
+      });
+    };
+    renderTop();
+    renderRecommendationRows();
+    sortRows("strength");
+    const setHorizonActive = (horizon) => {
+      document.querySelectorAll(".horizon-tab, .search-horizon-tab, .lookup-horizon-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(`.horizon-tab[data-horizon="${horizon}"]`).forEach(t => t.classList.add("active"));
+      document.querySelectorAll(`.search-horizon-tab[data-horizon="${horizon}"]`).forEach(t => t.classList.add("active"));
+      document.querySelectorAll(`.lookup-horizon-tab[data-horizon="${horizon}"]`).forEach(t => t.classList.add("active"));
+    };
+    document.querySelectorAll(".horizon-tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        setHorizonActive(tab.dataset.horizon);
+        selectedH = tab.dataset.horizon;
+        renderTop();
+        renderRecommendationRows();
+        sortRows(currentSortKey);
+        sortSearchRows(currentSearchSortKey);
+      });
+    });
+    document.querySelectorAll(".search-horizon-tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        setHorizonActive(tab.dataset.horizon);
+        selectedH = tab.dataset.horizon;
+        renderTop();
+        renderRecommendationRows();
+        sortRows(currentSortKey);
+        sortSearchRows(currentSearchSortKey);
+      });
+    });
+    document.querySelectorAll(".lookup-horizon-tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        setHorizonActive(tab.dataset.horizon);
+        selectedH = tab.dataset.horizon;
+        renderTop();
+        renderRecommendationRows();
+        sortRows(currentSortKey);
+        sortSearchRows(currentSearchSortKey);
+      });
+    });
+    document.querySelectorAll("th.sortable-col").forEach(th => {
+      th.addEventListener("click", () => {
+        sortRows(th.dataset.sortKey || "strength");
+      });
+    });
+    let currentSearchSortKey = "strength";
+    let currentSearchSortDir = "desc";
+    const sortSearchRows = (sortKey) => {
+      const tbody = document.getElementById("searchRecoBody");
+      if (!tbody) return;
+      if (currentSearchSortKey === sortKey) {
+        currentSearchSortDir = currentSearchSortDir === "asc" ? "desc" : "asc";
+      } else {
+        currentSearchSortKey = sortKey;
+        currentSearchSortDir = "desc";
+      }
+      const pairs = [];
+      const rows = Array.from(tbody.querySelectorAll("tr.search-rec-row"));
+      rows.forEach(row => pairs.push({ main: row, detail: row.nextElementSibling }));
+      const scoreFor = (pair) => {
+        const row = pair.main;
+        const horizons = JSON.parse(row.dataset.horizons || "[]");
+        const probConf = JSON.parse(row.dataset.probconf || "{}");
+        const spark = JSON.parse(row.dataset.spark || "[]");
+        const hz = horizons.find(x => x.horizon === selectedH) || horizons[0] || {};
+        const ticker = row.querySelector("td:nth-child(1)")?.innerText.trim() || "";
+        const name = row.querySelector("td:nth-child(2)")?.innerText.trim() || "";
+        const category = row.querySelector("td:nth-child(3)")?.innerText.trim() || "";
+        const buySignal = row.querySelector("td:nth-child(4)")?.innerText.trim() || "";
+        const baseScore = Number(row.dataset.baseScore || 0);
+        const strength = Math.max(0, Math.min(100, baseScore * (0.6 + 0.8 * Number(hz.probability || 0.5))));
+        const conf = Number(probConf[selectedH] || 0);
+        const prob = Number(hz.probability || 0);
+        const price = Number(row.dataset.price || 0);
+        const tgtMid = (Number(hz.target_low || 0) + Number(hz.target_high || 0)) / 2;
+        const sparkLast = spark.length ? Number(spark[spark.length - 1]) : 0;
+        const signalRank = { "Strong Buy": 5, "Buy": 4, "Accumulate": 3, "Watch": 2, "Avoid": 1 }[buySignal] || 0;
+        switch (sortKey) {
+          case "ticker": return ticker.toLowerCase();
+          case "name": return name.toLowerCase();
+          case "category": return category.toLowerCase();
+          case "buy_signal": return signalRank;
+          case "strength": return strength;
+          case "confidence_gauge": return conf;
+          case "trend_heat_strip": return sparkLast;
+          case "probability": return prob;
+          case "current_value": return price;
+          case "target_range": return tgtMid;
+          case "entry_target_sparkline": return sparkLast;
+          default: return strength;
+        }
+      };
+      pairs.sort((a, b) => {
+        const va = scoreFor(a);
+        const vb = scoreFor(b);
+        let cmp = 0;
+        if (typeof va === "string" || typeof vb === "string") cmp = String(va).localeCompare(String(vb));
+        else cmp = Number(va) - Number(vb);
+        return currentSearchSortDir === "asc" ? cmp : -cmp;
+      });
+      pairs.forEach(p => {
+        tbody.appendChild(p.main);
+        if (p.detail) tbody.appendChild(p.detail);
+      });
+    };
+    if (document.getElementById("searchRecoBody")) {
+      sortSearchRows("strength");
+      document.querySelectorAll("th.search-sortable-col").forEach(th => {
+        th.addEventListener("click", () => sortSearchRows(th.dataset.sortKey || "strength"));
+      });
+    }
+    {% endif %}
+  </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: trading-pf
+    env: python
+    plan: free
+    autoDeploy: true
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn wsgi:app --workers 2 --threads 8 --timeout 240 --bind 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: TRADING_PF_CONFIG
+        value: config/default.yaml
+
