@@ -5,10 +5,11 @@ services:
     plan: free
     autoDeploy: true
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn wsgi:app --workers 2 --threads 8 --timeout 240 --bind 0.0.0.0:$PORT
+    startCommand: gunicorn wsgi:app --workers 1 --threads 2 --timeout 240 --bind 0.0.0.0:$PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.11
       - key: TRADING_PF_CONFIG
-        value: config/default.yaml
-
+        value: config/free.yaml
+      - key: OMP_NUM_THREADS
+        value: "1"

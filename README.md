@@ -120,6 +120,17 @@ Render provides a URL like:
 
 Open it in browser and click `Refresh`.
 
+### Free Tier Memory Fix (512MB)
+
+If your free host crashes with memory errors:
+
+1. Use `config/free.yaml` for lower-memory runtime.
+2. Keep Gunicorn at one worker:
+
+- `--workers 1 --threads 2`
+
+This repository is already set up that way in `render.yaml` and `Procfile`.
+
 ### 4. Optional custom domain
 
 In Render service settings:
