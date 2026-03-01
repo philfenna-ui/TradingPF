@@ -56,6 +56,7 @@ class IngestionPipeline:
                 dq = dict(raw.get("data_quality", {}))
                 mock_fields = list(dq.get("mock_fields", []))
                 used_old = False
+                replaced_fields: set[str] = set()
                 stale_hours = 0.0
                 if mock_fields and self.feature_store.exists("bundle_cache", ticker):
                     try:
@@ -72,11 +73,15 @@ class IngestionPipeline:
                             if fld in cached_bundle:
                                 raw[fld] = cached_bundle[fld]
                                 used_old = True
+                                replaced_fields.add(fld)
                     except Exception:
                         pass
                 if used_old:
+                    remaining_mock_fields = [f for f in mock_fields if f not in replaced_fields]
                     raw["data_quality"] = {
                         **dq,
+                        "is_mock": len(remaining_mock_fields) > 0,
+                        "mock_fields": remaining_mock_fields,
                         "is_stale": True,
                         "stale_age_hours": stale_hours,
                     }

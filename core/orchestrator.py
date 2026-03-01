@@ -219,8 +219,9 @@ class TradingPFOrchestrator:
             model_out = self.horizon_modeler.fit_predict(bundle["daily"], institutional_score)
             buy_category, buy_color = self._buy_category(institutional_score)
             quality = bundle.get("data_quality", {})
-            mock_data_used = bool(quality.get("is_mock", False))
             mock_fields = list(quality.get("mock_fields", []))
+            core_market_mock_fields = {"daily", "intraday"}
+            mock_data_used = bool(quality.get("is_mock", False)) and any(f in core_market_mock_fields for f in mock_fields)
             stale_data_used = bool(quality.get("is_stale", False))
             stale_age_hours = float(quality.get("stale_age_hours", 0.0))
 
