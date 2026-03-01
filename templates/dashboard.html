@@ -211,6 +211,60 @@
     .modal-content {
       width: min(620px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px;
     }
+    .loading-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 10, 24, 0.72);
+      z-index: 1200;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .loading-box {
+      width: min(560px, 96%);
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 8px 20px rgba(10, 25, 47, 0.24);
+    }
+    .loader-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 2px solid rgba(59, 130, 246, 0.35);
+      border-top-color: #3b82f6;
+      animation: spin 1s linear infinite;
+      flex: 0 0 auto;
+    }
+    .progress-track {
+      width: 100%;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.25);
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 35%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #2563eb, #22c55e);
+      animation: slide 1.7s ease-in-out infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    @keyframes slide {
+      0% { transform: translateX(-120%); }
+      100% { transform: translateX(300%); }
+    }
   </style>
 </head>
 <body class="dark">
@@ -456,7 +510,11 @@
     </div>
 
     <div class="panel grid">
-      <div class="metric"><strong>Last Data Refresh:</strong> {{ data.data_freshness.last_data_refresh }}</div>
+      <div class="metric">
+        <strong>Last Data Refresh:</strong>
+        <span id="lastRefreshStamp">{{ data.data_freshness.last_data_refresh }}</span>
+        <span id="refreshAge" class="muted" style="margin-left:6px;"></span>
+      </div>
       <div class="metric"><strong>Model Version:</strong> {{ data.model_diagnostics.model_version }}</div>
       <div class="metric"><strong>Regime:</strong> {{ data.risk_report.regime }}</div>
       <div class="metric"><strong>Risk Heat Index:</strong> {{ "%.1f"|format(data.risk_report.tail_risk_probability * 100) }}</div>
@@ -881,6 +939,18 @@
       <p id="termBody" class="muted"></p>
     </div>
   </div>
+  <div class="loading-overlay" id="loadingOverlay" aria-live="polite" aria-busy="true">
+    <div class="loading-box">
+      <div class="loader-row">
+        <div class="spinner"></div>
+        <strong id="loadingTitle">Refreshing pipeline...</strong>
+      </div>
+      <div class="progress-track"><div class="progress-bar"></div></div>
+      <p id="loadingStep" class="muted" style="margin:10px 0 0 0; font-size:12px;">
+        Fetching latest market and macro data.
+      </p>
+    </div>
+  </div>
 
   <script>
     const glossary = {
@@ -1035,7 +1105,82 @@
     document.getElementById("closeModal")?.addEventListener("click", () => modal.style.display = "none");
     modal?.addEventListener("click", e => { if (e.target === modal) modal.style.display = "none"; });
 
+    const loadingOverlay = document.getElementById("loadingOverlay");
+    const loadingStep = document.getElementById("loadingStep");
+    const loadingTitle = document.getElementById("loadingTitle");
+    let loadingTimer = null;
+    const loadingSteps = [
+      "Fetching latest market and macro data.",
+      "Running technical, flow, and catalyst modules.",
+      "Calibrating multi-timeframe probabilities.",
+      "Ranking top recommendations and updating dashboard."
+    ];
+    const showLoading = (title = "Refreshing pipeline...") => {
+      if (!loadingOverlay) return;
+      loadingTitle.textContent = title;
+      let i = 0;
+      loadingStep.textContent = loadingSteps[i];
+      loadingOverlay.style.display = "flex";
+      document.body.style.overflow = "hidden";
+      if (loadingTimer) clearInterval(loadingTimer);
+      loadingTimer = setInterval(() => {
+        i = (i + 1) % loadingSteps.length;
+        loadingStep.textContent = loadingSteps[i];
+      }, 1400);
+    };
+    const hideLoading = () => {
+      if (!loadingOverlay) return;
+      loadingOverlay.style.display = "none";
+      document.body.style.overflow = "";
+      if (loadingTimer) clearInterval(loadingTimer);
+      loadingTimer = null;
+    };
+    window.addEventListener("pageshow", hideLoading);
+    window.addEventListener("beforeunload", () => {
+      if (loadingTimer) clearInterval(loadingTimer);
+    });
+    document.querySelectorAll('form[action="/run"]').forEach(form => {
+      form.addEventListener("submit", () => showLoading("Refreshing pipeline..."));
+    });
+    document.querySelectorAll('form[action="/paper_trade"]').forEach(form => {
+      form.addEventListener("submit", () => showLoading("Submitting paper trade..."));
+    });
+    document.querySelectorAll('form[action="/watchlist/add"], form[action="/watchlist/remove"]').forEach(form => {
+      form.addEventListener("submit", () => showLoading("Updating watchlist..."));
+    });
+
     {% if data %}
+    const refreshStamp = document.getElementById("lastRefreshStamp");
+    const refreshAge = document.getElementById("refreshAge");
+    const updateRefreshAge = () => {
+      if (!refreshStamp || !refreshAge) return;
+      const raw = (refreshStamp.textContent || "").trim();
+      if (!raw || raw.toLowerCase().includes("not refreshed")) {
+        refreshAge.textContent = "(not run yet)";
+        return;
+      }
+      const dt = new Date(raw);
+      if (Number.isNaN(dt.getTime())) {
+        refreshAge.textContent = "";
+        return;
+      }
+      const diffMs = Date.now() - dt.getTime();
+      if (diffMs < 0) {
+        refreshAge.textContent = "(just now)";
+        return;
+      }
+      const mins = Math.floor(diffMs / 60000);
+      if (mins < 1) refreshAge.textContent = "(just now)";
+      else if (mins < 60) refreshAge.textContent = `(${mins}m ago)`;
+      else {
+        const hrs = Math.floor(mins / 60);
+        const rem = mins % 60;
+        refreshAge.textContent = `(${hrs}h ${rem}m ago)`;
+      }
+    };
+    updateRefreshAge();
+    setInterval(updateRefreshAge, 15000);
+
     const dataPayload = {{ data|tojson }};
     const horizons = ["1D","2D","1W","1M","6M"];
     const rec0 = dataPayload.recommendations[0] || null;

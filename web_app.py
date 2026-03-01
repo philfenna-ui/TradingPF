@@ -25,6 +25,7 @@ CONFIG_ENV_VAR = "TRADING_PF_CONFIG"
 LAST_DATA: dict | None = None
 LAST_CONTROL_KEY: str | None = None
 WATCHLIST_PATH = BASE_DIR / "logs" / "watchlist.json"
+LAST_PAYLOAD_PATH = BASE_DIR / "logs" / "last_full_payload.json"
 ALL_SIGNALS = ["Strong Buy", "Buy", "Accumulate", "Watch", "Avoid"]
 DISCOVERY_UNIVERSE = [
     "SPY","QQQ","IWM","DIA","VTI","TLT","IEF","LQD","HYG","GLD","SLV","USO","XLE","XLF","XLK","XLV","XLI","XLP","XLY","XLU",
@@ -45,6 +46,49 @@ DISCOVERY_UNIVERSE_EXTENDED = DISCOVERY_UNIVERSE + [
     "DAL","UAL","AAL","LUV","UPS","FDX","CSX","NSC","UNP",
     "BABA","PDD","TSM","ASML","SAP","SHEL","BP","RDSA.AS","EEM","EFA",
 ]
+
+
+def _empty_dashboard_data() -> dict:
+    return {
+        "headline_brief": {"us": [], "europe": [], "world": [], "summary": "", "actions": [], "major_events": []},
+        "data_freshness": {"last_data_refresh": "Not refreshed yet"},
+        "model_diagnostics": {"model_version": "N/A", "model_drift_warning": False},
+        "risk_report": {
+            "regime": "Unknown",
+            "tail_risk_probability": 0.0,
+            "sector_exposure": {},
+            "asset_class_exposure": {},
+        },
+        "cross_asset_intelligence": {"risk_on_off_score": 0.0, "correlation_30d": {}},
+        "recommendations": [],
+        "search_results": [],
+        "horizon_top": {},
+        "accuracy_panel": {},
+        "performance_validation": {"sharpe_by_signal_type": {}, "max_drawdown_by_signal_type": {}},
+        "alt_rankings": {"conservative": [], "aggressive": []},
+        "data_variation_warning": "",
+        "controls": {},
+    }
+
+
+def _save_last_payload(data: dict) -> None:
+    try:
+        LAST_PAYLOAD_PATH.parent.mkdir(parents=True, exist_ok=True)
+        LAST_PAYLOAD_PATH.write_text(json.dumps(data), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _load_last_payload() -> dict | None:
+    if not LAST_PAYLOAD_PATH.exists():
+        return None
+    try:
+        raw = json.loads(LAST_PAYLOAD_PATH.read_text(encoding="utf-8"))
+        if isinstance(raw, dict):
+            return raw
+    except Exception:
+        return None
+    return None
 
 
 def _run_with_signal_refill(
@@ -205,20 +249,11 @@ def index():
         "signal_search_mode": False,
     }
     try:
-        data = run_pipeline(
-            config_path=DEFAULT_CONFIG,
-            confidence_threshold=0.5,
-            risk_tolerance=0.5,
-            include_signals=controls["include_signals"],
-        )
-        LAST_DATA = data
-        LAST_CONTROL_KEY = _controls_key(
-            controls["confidence_threshold"],
-            controls["risk_tolerance"],
-            controls["ranking_profile"],
-            controls["disabled_modules"],
-            controls["include_signals"],
-        )
+        if LAST_DATA is None:
+            LAST_DATA = _load_last_payload()
+        if LAST_DATA is not None:
+            return _render_dashboard(LAST_DATA, DEFAULT_CONFIG, None, controls, "")
+        data = _empty_dashboard_data()
         return _render_dashboard(data, DEFAULT_CONFIG, None, controls, "")
     except Exception as exc:
         return _render_dashboard(None, DEFAULT_CONFIG, str(exc), controls, ""), 500
@@ -254,6 +289,7 @@ def run_dashboard():
             )
             LAST_DATA = data
             LAST_CONTROL_KEY = ctl_key
+            _save_last_payload(data)
         if override:
             searched = run_pipeline(
                 config_path=config_path,
@@ -268,6 +304,7 @@ def run_dashboard():
         else:
             data["search_results"] = []
             LAST_DATA = data
+            _save_last_payload(data)
         return _render_dashboard(
             data,
             config_path,
@@ -345,6 +382,7 @@ def scan_ticker(ticker: str):
     include_signals = ALL_SIGNALS.copy()
     data = run_pipeline(config_path=DEFAULT_CONFIG, universe_override=[t], include_signals=include_signals)
     LAST_DATA = data
+    _save_last_payload(data)
     LAST_CONTROL_KEY = _controls_key(0.5, 0.5, "balanced", [], include_signals)
     return _render_dashboard(
         data,
@@ -461,7 +499,7 @@ def watchlist_add():
         )
     _save_watchlist(items)
     if LAST_DATA is None:
-        LAST_DATA = run_pipeline(config_path=DEFAULT_CONFIG)
+        LAST_DATA = _load_last_payload() or _empty_dashboard_data()
     return _render_dashboard(
         LAST_DATA,
         DEFAULT_CONFIG,
@@ -493,7 +531,7 @@ def watchlist_remove():
         items = [x for x in items if x.get("ticker") != ticker]
     _save_watchlist(items)
     if LAST_DATA is None:
-        LAST_DATA = run_pipeline(config_path=DEFAULT_CONFIG)
+        LAST_DATA = _load_last_payload() or _empty_dashboard_data()
     return _render_dashboard(LAST_DATA, DEFAULT_CONFIG, None, controls, ticker_search, trade_message=f"{ticker} removed from watchlist.")
 
 
