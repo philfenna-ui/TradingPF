@@ -18,5 +18,5 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["gunicorn", "wsgi:app", "--workers", "2", "--threads", "8", "--timeout", "240", "--bind", "0.0.0.0:5000"]
-
+# Use hosting platform assigned PORT (Render/Railway/Fly/etc.)
+CMD sh -c "gunicorn wsgi:app --workers 1 --threads 2 --timeout 240 --bind 0.0.0.0:${PORT:-5000}"
